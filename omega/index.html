@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>OMEGA v3.1 — BTC Predictor</title>
+<title>OMEGA v3.2 — BTC Predictor</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -159,7 +159,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:500px;backgro
       <div class="logo-icon">Ω</div>
       <div><div class="logo-name">OMEGA</div><div class="logo-sub">5-Min Predictor · Polymarket BTC/USD</div></div>
     </div>
-    <span class="ver">v3.1</span>
+    <span class="ver">v3.2</span>
   </div>
   <div class="notice gray" style="margin-top:8px"><div class="nd gray"></div>Las predicciones no son 100% precisas. Úsalas como referencia.</div>
   <div class="notice blue" style="margin-top:6px"><div class="nd blue"></div>Precio Chainlink en tiempo real — mismo feed que usa Polymarket.</div>
@@ -320,6 +320,119 @@ function updateDiff(){
 // ═══════════════════════════════════
 const HIST_KEY='omega_hist_v2';
 
+// ═══════════════════════════════════
+// SISTEMA DE MEMORIA ESTADÍSTICA
+// ═══════════════════════════════════
+const MEMORY_KEY = 'omega_memory_v1';
+
+function loadMemory(){
+  try{ return JSON.parse(localStorage.getItem(MEMORY_KEY)) || {}; }
+  catch{ return {}; }
+}
+
+function saveMemory(m){
+  try{ localStorage.setItem(MEMORY_KEY, JSON.stringify(m)); }
+  catch(e){}
+}
+
+function updateMemory(slot){
+  // Solo procesar slots cerrados con resultado real
+  if(!slot || slot.result === 'PENDING' || !slot.priceAtClose) return;
+  const m = loadMemory();
+  if(!m.patterns) m.patterns = {};
+  if(!m.hourStats) m.hourStats = {};
+  if(!m.conditionStats) m.conditionStats = {};
+  if(!m.total) m.total = { wins: 0, losses: 0 };
+
+  const won = slot.result === 'WIN';
+  const hour = new Date(slot.slotKey * 1000).getHours();
+  const gap = slot.priceAtClose - slot.ptb;
+  const gapPct = (gap / slot.ptb * 100);
+
+  // Stats por hora del día
+  if(!m.hourStats[hour]) m.hourStats[hour] = { wins: 0, losses: 0 };
+  won ? m.hourStats[hour].wins++ : m.hourStats[hour].losses++;
+
+  // Stats por dirección predicha
+  const dirKey = slot.direction;
+  if(!m.conditionStats[dirKey]) m.conditionStats[dirKey] = { wins: 0, losses: 0 };
+  won ? m.conditionStats[dirKey].wins++ : m.conditionStats[dirKey].losses++;
+
+  // Stats por rango de confianza
+  const confBucket = slot.confidence >= 80 ? 'high' : slot.confidence >= 65 ? 'mid' : 'low';
+  const confKey = 'conf_' + confBucket;
+  if(!m.conditionStats[confKey]) m.conditionStats[confKey] = { wins: 0, losses: 0 };
+  won ? m.conditionStats[confKey].wins++ : m.conditionStats[confKey].losses++;
+
+  // Total global
+  won ? m.total.wins++ : m.total.losses++;
+  m.lastUpdated = Date.now();
+
+  saveMemory(m);
+}
+
+function getMemoryInsights(){
+  const m = loadMemory();
+  if(!m.total || (m.total.wins + m.total.losses) < 5){
+    return { desc: 'sin suficientes datos históricos aún', hourBias: 0, insights: [] };
+  }
+
+  const insights = [];
+  const hour = new Date().getHours();
+
+  // Insight por hora actual
+  if(m.hourStats && m.hourStats[hour]){
+    const h = m.hourStats[hour];
+    const total = h.wins + h.losses;
+    if(total >= 3){
+      const wr = (h.wins/total*100).toFixed(0);
+      insights.push(`A las ${hour}h: ${wr}% win rate (${total} slots)`);
+    }
+  }
+
+  // Insight por confianza
+  if(m.conditionStats){
+    ['high','mid','low'].forEach(level => {
+      const key = 'conf_' + level;
+      if(m.conditionStats[key]){
+        const c = m.conditionStats[key];
+        const total = c.wins + c.losses;
+        if(total >= 3){
+          const wr = (c.wins/total*100).toFixed(0);
+          const label = level === 'high' ? '≥80%' : level === 'mid' ? '65-79%' : '<65%';
+          insights.push(`Confianza ${label}: ${wr}% WR (${total} slots)`);
+        }
+      }
+    });
+  }
+
+  // Mejor/peor hora
+  let bestHour = null, bestWR = 0;
+  if(m.hourStats){
+    Object.entries(m.hourStats).forEach(([h, stats]) => {
+      const total = stats.wins + stats.losses;
+      if(total >= 3){
+        const wr = stats.wins/total;
+        if(wr > bestWR){ bestWR = wr; bestHour = h; }
+      }
+    });
+  }
+
+  const hourBias = m.hourStats?.[hour] ?
+    (() => { const h = m.hourStats[hour]; const t = h.wins+h.losses;
+      return t >= 3 ? (h.wins/t - 0.5) * 2 : 0; })() : 0;
+
+  return {
+    desc: insights.length > 0 ? insights.join(' | ') : 'acumulando datos...',
+    hourBias,
+    bestHour,
+    bestWR: (bestWR*100).toFixed(0),
+    totalSlots: m.total.wins + m.total.losses,
+    globalWR: ((m.total.wins/(m.total.wins+m.total.losses))*100).toFixed(0),
+    insights
+  };
+}
+
 function loadHist(){
   try{return JSON.parse(localStorage.getItem(HIST_KEY))||[];}
   catch{return[];}
@@ -364,6 +477,7 @@ function closeLastSlot(closingPrice){
       h[i].priceAtClose=closingPrice;
       h[i].gapFinal=gap;
       h[i].result=won?'WIN':'LOSS';
+      updateMemory(h[i]); // actualizar memoria estadística
       saveHist(h);
       renderHistory();
       // Flash de resultado
@@ -825,6 +939,7 @@ async function askClaude(btcPrice,change24h,polyData,fg){
   const intra = getIntraSlotMomentum();
   const macro = getMacroTrend();
   const vol = getVolatility();
+  const mem = getMemoryInsights();
   const polyVol = polyData?.volume || 0;
   const polyVolSignal = polyVol > 30000 ? 'ALTO ($'+Math.round(polyVol/1000)+'K) — crowd confiable' :
                         polyVol > 10000 ? 'MEDIO ($'+Math.round(polyVol/1000)+'K)' :
@@ -879,6 +994,12 @@ async function askClaude(btcPrice,change24h,polyData,fg){
 
 SLOT ACTUAL (${secsLeft}s restantes):
 - BTC actual: ${fmt(btcPrice)} | PTB: ${fmt(ptb)} | Gap: ${diff>=0?'+':''}${diff.toFixed(2)} (${pct.toFixed(3)}%)
+
+MEMORIA ESTADÍSTICA (aprendizaje de sesiones anteriores):
+- Total slots analizados: ${mem.totalSlots}
+- Win rate histórico global: ${mem.globalWR}%
+- ${mem.desc}
+- Bias por hora actual: ${mem.hourBias > 0.2 ? '📈 históricamente alcista a esta hora' : mem.hourBias < -0.2 ? '📉 históricamente bajista a esta hora' : 'neutral a esta hora'}
 
 TENDENCIA MACRO (última hora — contexto general):
 - ${macro.desc}
