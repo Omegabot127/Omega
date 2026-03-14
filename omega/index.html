@@ -17,7 +17,7 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:13px;min-height:100vh}
-.wrap{max-width:980px;margin:0 auto;padding:0 0 60px;position:relative}
+.wrap{max-width:1400px;margin:0 auto;padding:0 0 60px;position:relative}
 
 /* ── TOPBAR ── */
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);background:#111113}
@@ -54,39 +54,39 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 .ens-dot{width:6px;height:6px;border-radius:50%;background:var(--blue);animation:pulse 1.5s infinite;flex-shrink:0}
 
 /* ── PRICE GRID ── */
-.price-grid{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)}
-.pc{padding:16px 20px;position:relative}
-.pc:first-child{border-right:1px solid var(--border)}
-.pc-lbl{font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px}
-.pc-val{font-size:28px;font-weight:700;letter-spacing:-.02em}
+.price-grid{display:grid;grid-template-columns:260px 260px 1fr;border-bottom:1px solid var(--border);min-height:160px}
+.pc{padding:20px 24px;position:relative}
+.pc:not(:last-child){border-right:1px solid var(--border)}
+.pc-lbl{font-size:10px;letter-spacing:.15em;color:var(--muted);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px;font-weight:600}
+.pc-val{font-size:38px;font-weight:800;letter-spacing:-.03em;line-height:1}
 .pc-val.gold{color:var(--gold)}
 .pc-val.white{color:#fff}
-.pc-sub{font-size:10px;color:var(--muted);margin-top:4px}
+.pc-sub{font-size:11px;color:var(--muted);margin-top:8px;font-weight:500}
 
-/* Mini chart */
-.mini-chart-wrap{position:absolute;right:12px;top:12px;bottom:12px;width:200px;display:flex;flex-direction:column;gap:4px;overflow:hidden}
-.mini-chart-btns{display:flex;gap:4px;justify-content:flex-end;flex-shrink:0}
-.chart-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:2px 8px;font-size:9px;cursor:pointer;font-family:inherit;transition:all .15s}
+/* Chart panel */
+.chart-panel{display:flex;flex-direction:column;padding:14px 20px;gap:8px}
+.chart-panel-btns{display:flex;gap:6px;justify-content:flex-end;flex-shrink:0}
+.chart-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:3px 12px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;letter-spacing:.05em}
 .chart-btn.active{background:var(--gold)22;border-color:var(--gold);color:var(--gold)}
-.mini-chart-canvas-wrap{flex:1;position:relative;overflow:hidden;border-radius:4px}
+.chart-canvas-wrap{flex:1;position:relative;overflow:hidden;border-radius:6px;min-height:110px}
 #miniChart{position:absolute;inset:0;width:100%!important;height:100%!important}
 
 /* ── DIFF ── */
-.diff-card{padding:10px 20px;text-align:center;border-bottom:1px solid var(--border);font-size:13px;font-weight:600}
+.diff-card{padding:10px 24px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;display:flex;align-items:center;gap:12px}
 .diff-val.pos{color:var(--green)}.diff-val.neg{color:var(--red)}.diff-val.wait{color:var(--muted)}
-.diff-lbl{font-size:9px;letter-spacing:.12em;color:var(--muted);margin-bottom:4px;text-transform:uppercase}
+.diff-lbl{font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;font-weight:600}
 
 /* ── PREDICTION ── */
 .pred{padding:16px 20px;border-bottom:1px solid var(--border)}
 .pred.up{border-left:3px solid var(--green)}.pred.down{border-left:3px solid var(--red)}
 .pred-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
-.pred-verdict{font-size:28px;font-weight:800;letter-spacing:.04em}
+.pred-verdict{font-size:36px;font-weight:800;letter-spacing:.04em}
 .pred-verdict.up{color:var(--green)}.pred-verdict.down{color:var(--red)}
-.pred-lock{font-size:10px;color:var(--muted);background:var(--s3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;margin-left:8px}
-.pred-desc{font-size:11px;color:var(--muted);margin-top:4px}
+.pred-lock{font-size:10px;color:var(--muted);background:var(--s3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;margin-left:8px;font-weight:600}
+.pred-desc{font-size:12px;color:var(--muted);margin-top:4px;font-weight:500}
 .chips{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
-.chip{background:var(--s3);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:11px;font-weight:600}
-.chip-lbl{font-size:9px;color:var(--muted);margin-right:4px;font-weight:400}
+.chip{background:var(--s3);border:1px solid var(--border);border-radius:4px;padding:4px 12px;font-size:12px;font-weight:700}
+.chip-lbl{font-size:9px;color:var(--muted);margin-right:4px;font-weight:500}
 .model-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
 .mc{background:var(--s3);border:1px solid var(--border);border-radius:6px;padding:10px}
 .mc-name{font-size:9px;letter-spacing:.1em;color:var(--muted);margin-bottom:4px;text-transform:uppercase}
@@ -96,16 +96,16 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 .sig-table{width:100%;border-collapse:collapse}
 .sig-table tr{border-bottom:1px solid var(--b2)}
 .sig-table tr:last-child{border-bottom:none}
-.sig-table td{padding:7px 4px;font-size:11px;vertical-align:middle}
-.sig-name{color:var(--muted);width:130px}
-.sig-val{color:var(--text);white-space:nowrap;min-width:90px}
+.sig-table td{padding:7px 4px;font-size:12px;vertical-align:middle}
+.sig-name{color:var(--muted);width:130px;font-weight:500}
+.sig-val{color:var(--text);white-space:nowrap;min-width:90px;font-weight:700}
 .sig-bar-wrap{padding:0 10px}
 .sig-bg{height:2px;background:var(--dim);border-radius:2px;overflow:hidden}
 .sig-fill{height:100%;border-radius:2px;transition:width 1.2s ease}
 .sig-score{color:var(--muted);font-size:10px;text-align:right;width:32px}
 .cd-wrap{display:flex;flex-direction:column;align-items:center;gap:3px}
 .cd-sub{font-size:9px;color:var(--muted);letter-spacing:.1em}
-.ai-text{font-size:11px;line-height:1.7;color:rgba(226,232,240,.7)}
+.ai-text{font-size:12px;line-height:1.75;color:rgba(226,232,240,.8);font-weight:500}
 
 /* ── POLYMARKET ── */
 .poly-item{margin:0 20px 8px;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
@@ -139,10 +139,10 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 .badge.win{background:rgba(38,166,154,.12);color:var(--green);border:1px solid rgba(38,166,154,.2)}
 .badge.loss{background:rgba(239,83,80,.12);color:var(--red);border:1px solid rgba(239,83,80,.2)}
 .badge.pend{background:rgba(240,185,11,.12);color:var(--gold);border:1px solid rgba(240,185,11,.2)}
-.dir-u{color:var(--green);font-weight:700;font-size:11px}
-.dir-d{color:var(--red);font-weight:700;font-size:11px}
-.h-slot{font-size:10px;color:var(--muted)}
-.h-price{font-size:11px;color:var(--text)}
+.dir-u{color:var(--green);font-weight:800;font-size:12px}
+.dir-d{color:var(--red);font-weight:800;font-size:12px}
+.h-slot{font-size:11px;color:var(--muted);font-weight:600}
+.h-price{font-size:12px;color:var(--text);font-weight:600}
 .h-conf{font-size:10px;color:var(--muted)}
 .h-gap.p{color:var(--green);font-size:10px}
 .h-gap.n{color:var(--red);font-size:10px}
@@ -206,28 +206,28 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
   <!-- PRICES -->
   <div class="price-grid">
     <div class="pc">
-      <div class="pc-lbl">PRICE TO BEAT <span id="ptbEditBtn" onclick="togglePTBEdit()" style="cursor:pointer;font-size:9px;color:var(--gold);margin-left:6px;opacity:0.7">✏️ edit</span></div>
+      <div class="pc-lbl">Price to Beat <span id="ptbEditBtn" onclick="togglePTBEdit()" style="cursor:pointer;font-size:9px;color:var(--gold);margin-left:6px;opacity:0.7">✏️ edit</span></div>
       <div style="display:flex;align-items:center;gap:8px">
         <div class="pc-val white" id="ptbVal">—</div>
         <input id="ptbInput" type="number" step="0.01"
-          style="display:none;background:var(--s2);border:1px solid var(--gold);color:#fff;font-family:inherit;font-size:18px;font-weight:700;width:140px;padding:2px 8px;border-radius:4px;"
+          style="display:none;background:var(--s2);border:1px solid var(--gold);color:#fff;font-family:inherit;font-size:22px;font-weight:800;width:160px;padding:4px 10px;border-radius:4px;"
           onkeydown="if(event.key==='Enter')applyPTBEdit()"
           onblur="applyPTBEdit()"/>
       </div>
       <div class="pc-sub" id="ptbSub">Precio apertura del slot</div>
     </div>
-    <div class="pc" style="padding-right:224px">
-      <div class="pc-lbl">CURRENT PRICE</div>
+    <div class="pc">
+      <div class="pc-lbl">Current Price</div>
       <div class="pc-val gold" id="curVal">—</div>
       <div class="pc-sub" id="curSub">Chainlink live...</div>
-      <!-- Mini chart -->
-      <div class="mini-chart-wrap">
-        <div class="mini-chart-btns">
-          <button class="chart-btn active" id="btnLine" onclick="setChartMode('line')">Line</button>
-          <button class="chart-btn" id="btnCandle" onclick="setChartMode('candle')">Candles</button>
-        </div>
-        <div class="mini-chart-canvas-wrap"><canvas id="miniChart"></canvas></div>
+    </div>
+    <!-- Chart panel -->
+    <div class="chart-panel">
+      <div class="chart-panel-btns">
+        <button class="chart-btn active" id="btnLine" onclick="setChartMode('line')">Line</button>
+        <button class="chart-btn" id="btnCandle" onclick="setChartMode('candle')">Candles</button>
       </div>
+      <div class="chart-canvas-wrap"><canvas id="miniChart"></canvas></div>
     </div>
   </div>
   <div class="diff-card"><div class="diff-lbl">Current vs Target</div><div class="diff-val wait" id="diffVal">Esperando datos...</div></div>
@@ -1431,8 +1431,8 @@ function drawCandleCanvas(canvas, prices, yMin, yMax, yFmt){
   if(candles.length < 1) return;
 
   const wrap = canvas.parentElement;
-  const W = wrap.clientWidth  || 188;
-  const H = wrap.clientHeight || 80;
+  const W = wrap.clientWidth  || 600;
+  const H = wrap.clientHeight || 130;
   canvas.width  = W * devicePixelRatio;
   canvas.height = H * devicePixelRatio;
   canvas.style.width  = W + 'px';
