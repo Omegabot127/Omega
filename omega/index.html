@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>OMEGA v3.0 — BTC Predictor</title>
+<title>OMEGA v3.1 — BTC Predictor</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -159,7 +159,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:500px;backgro
       <div class="logo-icon">Ω</div>
       <div><div class="logo-name">OMEGA</div><div class="logo-sub">5-Min Predictor · Polymarket BTC/USD</div></div>
     </div>
-    <span class="ver">v3.0</span>
+    <span class="ver">v3.1</span>
   </div>
   <div class="notice gray" style="margin-top:8px"><div class="nd gray"></div>Las predicciones no son 100% precisas. Úsalas como referencia.</div>
   <div class="notice blue" style="margin-top:6px"><div class="nd blue"></div>Precio Chainlink en tiempo real — mismo feed que usa Polymarket.</div>
@@ -472,6 +472,7 @@ async function fetchBTCBinance(){
 // wss://ws-live-data.polymarket.com — sin autenticación, mismo precio que Polymarket
 let chainlinkPrice = null;
 let priceHistory = []; // {price, ts} ultimos 2 minutos
+let predictionScheduled = false; // evitar predicciones duplicadas
 let chainlinkTs = null;
 let rtdsWs = null;
 
@@ -708,6 +709,43 @@ function renderPoly(m){
 }
 
 // ─── Claude ───
+function getMacroTrend(){
+  // Tendencia general de la última hora basada en slots cerrados
+  try {
+    const hist = JSON.parse(localStorage.getItem('omega_hist_v2')||'[]');
+    const closed = hist.filter(h => h.result && h.result !== 'PENDING' && h.priceAtClose && h.ptb);
+    const last12 = closed.slice(0,12); // última hora aprox
+    if(last12.length < 4) return { trend: 0, desc: 'pocos datos', bullPct: 50 };
+    const ups = last12.filter(h => h.priceAtClose >= h.ptb).length;
+    const downs = last12.length - ups;
+    const bullPct = (ups / last12.length) * 100;
+    // Calcular pendiente de precios de cierre
+    const prices = last12.map(h => h.priceAtClose).reverse();
+    const firstHalf = prices.slice(0, Math.floor(prices.length/2));
+    const secondHalf = prices.slice(Math.floor(prices.length/2));
+    const avgFirst = firstHalf.reduce((a,b)=>a+b,0)/firstHalf.length;
+    const avgSecond = secondHalf.reduce((a,b)=>a+b,0)/secondHalf.length;
+    const slope = avgSecond - avgFirst;
+    const trend = slope > 20 ? 2 : slope > 5 ? 1 : slope < -20 ? -2 : slope < -5 ? -1 : 0;
+    return {
+      trend, bullPct: bullPct.toFixed(0), slope: slope.toFixed(0),
+      desc: `última hora: ${ups}↑ ${downs}↓, tendencia ${slope>5?'alcista':slope<-5?'bajista':'lateral'} (${slope>=0?'+':''}${slope.toFixed(0)} USD)`
+    };
+  } catch(e) { return { trend: 0, desc: 'error', bullPct: 50 }; }
+}
+
+function getVolatility(){
+  // Volatilidad del slot actual basada en historial de precios
+  if(priceHistory.length < 4) return { high: 0, low: 0, range: 0, volatile: false };
+  const prices = priceHistory.map(p => p.price);
+  const high = Math.max(...prices);
+  const low = Math.min(...prices);
+  const range = high - low;
+  const volatile = range > 60; // más de $60 de rango = slot volátil
+  return { high, low, range: range.toFixed(0), volatile,
+    desc: `rango $${range.toFixed(0)} (${volatile?'⚡ VOLÁTIL':'estable'})` };
+}
+
 function getIntraSlotMomentum(){
   // Analiza la dirección del precio en los últimos 2 minutos
   if(priceHistory.length < 3) return { trend: 0, desc: 'sin datos', slope: 0 };
@@ -782,10 +820,15 @@ async function askClaude(btcPrice,change24h,polyData,fg){
   const secsLeft=Math.max(0,Math.floor((getNextSlotMs()-Date.now())/1000));
   const fearIdx=parseInt(fg.value||50);
 
-  // ── Momentum de slots recientes ──
+  // ── Señales de mercado ──
   const mom = getRecentMomentum();
-  // ── Momentum intra-slot (precio últimos 2 min) ──
   const intra = getIntraSlotMomentum();
+  const macro = getMacroTrend();
+  const vol = getVolatility();
+  const polyVol = polyData?.volume || 0;
+  const polyVolSignal = polyVol > 30000 ? 'ALTO ($'+Math.round(polyVol/1000)+'K) — crowd confiable' :
+                        polyVol > 10000 ? 'MEDIO ($'+Math.round(polyVol/1000)+'K)' :
+                        'BAJO ($'+Math.round(polyVol/1000)+'K) — odds poco confiables';
 
   // ── Score compuesto ──
   let bullPts = 0, bearPts = 0;
@@ -811,22 +854,41 @@ async function askClaude(btcPrice,change24h,polyData,fg){
   else if(avgGapNum < -20) bearPts += 1.5;
   else if(avgGapNum < 0) bearPts += 0.75;
 
-  // 5. Polymarket (peso 0.8) — señal de mercado secundaria
-  const polyEdge = Math.abs(upPct - 50) / 50;
-  if(upPct > downPct) bullPts += polyEdge * 0.8; else bearPts += polyEdge * 0.8;
+  // 5. Macro tendencia hora (peso 2)
+  if(macro.trend > 0) bullPts += Math.min(2, macro.trend);
+  else if(macro.trend < 0) bearPts += Math.min(2, Math.abs(macro.trend));
 
-  // 6. Fear & Greed (peso 0.5)
+  // 6. Polymarket ponderado por volumen (peso 0.5-1.5)
+  const polyEdge = Math.abs(upPct - 50) / 50;
+  const polyWeight = polyVol > 30000 ? 1.5 : polyVol > 10000 ? 1.0 : 0.3;
+  if(upPct > downPct) bullPts += polyEdge * polyWeight; else bearPts += polyEdge * polyWeight;
+
+  // 7. Fear & Greed (peso 0.5)
   if(fearIdx < 30) bullPts += 0.5; else if(fearIdx > 70) bearPts += 0.5;
+
+  // 8. Volatilidad — si es muy volátil, reducir confianza (no cambia dirección)
+  const volPenalty = vol.volatile ? 0.8 : 1.0; // multiplicador de confianza
 
   const totalPts = bullPts + bearPts || 1;
   const bullPct = (bullPts / totalPts * 100);
   const direction = bullPct >= 50 ? 'UP' : 'DOWN';
-  const confidence = Math.round(50 + Math.abs(bullPct - 50) * 0.8);
+  const baseConf = Math.round(50 + Math.abs(bullPct - 50) * 0.8);
+  const confidence = Math.round(baseConf * volPenalty);
 
   const prompt = `Eres un trader experto en BTC. Valida y ajusta esta predicción basándote en los datos.
 
 SLOT ACTUAL (${secsLeft}s restantes):
 - BTC actual: ${fmt(btcPrice)} | PTB: ${fmt(ptb)} | Gap: ${diff>=0?'+':''}${diff.toFixed(2)} (${pct.toFixed(3)}%)
+
+TENDENCIA MACRO (última hora — contexto general):
+- ${macro.desc}
+- ${parseInt(macro.bullPct)}% de slots cerraron en positivo esta hora
+
+VOLATILIDAD DEL SLOT ACTUAL:
+- ${vol.desc}
+- Rango precio: $${vol.low?.toFixed(0)||'—'} — $${vol.high?.toFixed(0)||'—'}
+
+VOLUMEN POLYMARKET: ${polyVolSignal}
 
 MOMENTUM INTRA-SLOT (precio últimos 2 minutos — señal más inmediata):
 - ${intra.desc}
@@ -1026,10 +1088,26 @@ async function runFull(){
     }
   }
 
-  // Claude IA
+  // Claude IA — esperar 90s desde inicio del slot para tener datos intra-slot
   try{
-    $('d4').className='sdot spin';$('l4').textContent='IA — generando predicción...';
+    $('d4').className='sdot spin';$('l4').textContent='IA — esperando datos del slot...';
+    const slotAge = Math.floor((Date.now() - getSlotKey()*1000)/1000);
+    const waitTime = Math.max(0, 90 - slotAge); // esperar hasta 90s del slot
+    if(waitTime > 0 && !$('refreshBtn').dataset.forced){
+      ld('predWrap',`Recopilando datos del slot... (${waitTime}s)`);
+      // Mostrar cuenta regresiva
+      let remaining = waitTime;
+      const countInterval = setInterval(()=>{
+        remaining--;
+        if(remaining <= 0){ clearInterval(countInterval); return; }
+        ld('predWrap',`Recopilando datos del slot... (${remaining}s)`);
+        $('l4').textContent=`IA — analizando mercado (${remaining}s)...`;
+      }, 1000);
+      await new Promise(r => setTimeout(r, waitTime * 1000));
+      clearInterval(countInterval);
+    }
     ld('predWrap','Generando predicción con IA...');
+    $('l4').textContent='IA — generando predicción...';
     const pred=await askClaude(btcPrice,change24h,polyData,fg);
 
     // Sanity check: solo actuar si el gap es REALMENTE imposible Y Polymarket no dice lo contrario
