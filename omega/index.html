@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>OMEGA v3.3 — BTC Predictor</title>
+<title>OMEGA v3.4 — BTC Predictor</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -64,11 +64,12 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 .pc-sub{font-size:10px;color:var(--muted);margin-top:4px}
 
 /* Mini chart */
-.mini-chart-wrap{position:absolute;right:16px;top:16px;bottom:16px;width:110px;display:flex;flex-direction:column;gap:4px}
-.mini-chart-btns{display:flex;gap:4px;justify-content:flex-end}
-.chart-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:2px 7px;font-size:9px;cursor:pointer;font-family:inherit;transition:all .15s}
-.chart-btn.active{border-color:var(--gold);color:var(--gold)}
-#miniChart{flex:1}
+.mini-chart-wrap{position:absolute;right:12px;top:12px;bottom:12px;width:200px;display:flex;flex-direction:column;gap:4px;overflow:hidden}
+.mini-chart-btns{display:flex;gap:4px;justify-content:flex-end;flex-shrink:0}
+.chart-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:2px 8px;font-size:9px;cursor:pointer;font-family:inherit;transition:all .15s}
+.chart-btn.active{background:var(--gold)22;border-color:var(--gold);color:var(--gold)}
+.mini-chart-canvas-wrap{flex:1;position:relative;overflow:hidden;border-radius:4px}
+#miniChart{position:absolute;inset:0;width:100%!important;height:100%!important}
 
 /* ── DIFF ── */
 .diff-card{padding:10px 20px;text-align:center;border-bottom:1px solid var(--border);font-size:13px;font-weight:600}
@@ -181,7 +182,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
       <span class="logo-icon">Ω</span>
       <div><div class="logo-name">OMEGA</div><div class="logo-sub">5-Min Predictor · Polymarket BTC/USD</div></div>
     </div>
-    <span class="ver">v3.3</span>
+    <span class="ver">v3.4</span>
   </div>
   <div class="notice gray"><div class="nd gray"></div>Las predicciones no son 100% precisas. Úsalas como referencia.</div>
   <div class="notice blue"><div class="nd blue"></div>Precio Chainlink en tiempo real — mismo feed que usa Polymarket.</div>
@@ -215,7 +216,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
       </div>
       <div class="pc-sub" id="ptbSub">Precio apertura del slot</div>
     </div>
-    <div class="pc" style="padding-right:140px">
+    <div class="pc" style="padding-right:224px">
       <div class="pc-lbl">CURRENT PRICE</div>
       <div class="pc-val gold" id="curVal">—</div>
       <div class="pc-sub" id="curSub">Chainlink live...</div>
@@ -225,7 +226,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
           <button class="chart-btn active" id="btnLine" onclick="setChartMode('line')">Line</button>
           <button class="chart-btn" id="btnCandle" onclick="setChartMode('candle')">Candles</button>
         </div>
-        <canvas id="miniChart"></canvas>
+        <div class="mini-chart-canvas-wrap"><canvas id="miniChart"></canvas></div>
       </div>
     </div>
   </div>
@@ -1294,12 +1295,19 @@ startSlotTimer();
 runFull();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script>
 // ── Mini Chart ──
 let miniChartInstance = null;
 let chartMode = 'line';
-let chartPrices = []; // {time, price, open, high, low, close}
+let chartPrices = []; // {time, price}
 let chartLabels = [];
+
+// Shared axis/scale config
+const AXIS_COLOR = 'rgba(74,96,128,0.5)';
+const TICK_COLOR = '#4a6080';
+const TICK_FONT = { size: 8, family: 'inherit' };
+const GRID_COLOR = 'rgba(74,96,128,0.15)';
 
 function setChartMode(mode){
   chartMode = mode;
@@ -1310,86 +1318,212 @@ function setChartMode(mode){
 
 function addChartPrice(price){
   const now = new Date();
-  const label = now.getMinutes()+':'+String(now.getSeconds()).padStart(2,'0');
+  const label = now.getHours()+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
   chartPrices.push({price, time: now.getTime()});
   chartLabels.push(label);
-  // Keep last 60 points
-  if(chartPrices.length > 60){ chartPrices.shift(); chartLabels.shift(); }
+  if(chartPrices.length > 80){ chartPrices.shift(); chartLabels.shift(); }
   renderMiniChart();
+}
+
+// PTB annotation line (shared)
+function ptbAnnotation(){
+  if(!ptbFixed) return {};
+  return {
+    ptbLine: {
+      type: 'line',
+      yMin: ptbFixed, yMax: ptbFixed,
+      borderColor: '#ef535088',
+      borderWidth: 1,
+      borderDash: [4, 3],
+      label: { display: false }
+    }
+  };
 }
 
 function renderMiniChart(){
   const canvas = document.getElementById('miniChart');
   if(!canvas || chartPrices.length < 2) return;
-  const ctx = canvas.getContext('2d');
+  // Destroy any Chart.js instance before switching modes
   if(miniChartInstance){ miniChartInstance.destroy(); miniChartInstance = null; }
+  const ctx = canvas.getContext('2d');
 
   const prices = chartPrices.map(p => p.price);
-  const first = prices[0], last = prices[prices.length-1];
-  const color = last >= first ? '#f0b90b' : '#ef5350';
+  const minP = Math.min(...prices), maxP = Math.max(...prices);
+  const pad = (maxP - minP) * 0.15 || 5;
+  const yMin = minP - pad, yMax = maxP + pad;
+
+  // Y axis formatter
+  const yFmt = v => '$' + v.toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0});
 
   if(chartMode === 'line'){
+    // Thin out x labels — show ~4
+    const step = Math.max(1, Math.floor(chartLabels.length / 4));
+    const xLabels = chartLabels.map((l,i) => (i % step === 0 || i === chartLabels.length-1) ? l : '');
+
     miniChartInstance = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: chartLabels,
+        labels: xLabels,
         datasets: [{
           data: prices,
-          borderColor: color,
+          borderColor: '#f0b90b',
           borderWidth: 1.5,
           pointRadius: 0,
-          tension: 0.3,
-          fill: {target: 'origin', above: color+'18', below: color+'18'}
+          tension: 0.2,
+          fill: { target: 'origin', above: '#f0b90b12', below: '#f0b90b12' }
         }]
       },
       options: {
         responsive: true, maintainAspectRatio: false, animation: false,
-        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        layout: { padding: { top: 4, bottom: 0, left: 0, right: 4 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { enabled: false },
+          annotation: { annotations: ptbAnnotation() }
+        },
         scales: {
-          x: { display: false },
-          y: { display: false, grace: '5%' }
+          x: {
+            display: true,
+            ticks: {
+              color: TICK_COLOR, font: TICK_FONT, maxRotation: 0,
+              autoSkip: false,
+              callback(val, i){ return xLabels[i] || ''; }
+            },
+            grid: { color: GRID_COLOR, drawBorder: false },
+            border: { display: false }
+          },
+          y: {
+            display: true,
+            position: 'right',
+            min: yMin, max: yMax,
+            ticks: {
+              color: TICK_COLOR, font: TICK_FONT,
+              maxTicksLimit: 4,
+              callback: yFmt
+            },
+            grid: { color: GRID_COLOR, drawBorder: false },
+            border: { display: false }
+          }
         }
       }
     });
   } else {
-    // Candles — group by 30s buckets
-    const buckets = {};
-    chartPrices.forEach(p => {
-      const key = Math.floor(p.time / 30000) * 30000;
-      if(!buckets[key]){ buckets[key] = {open:p.price,high:p.price,low:p.price,close:p.price,t:key}; }
-      else {
-        buckets[key].high = Math.max(buckets[key].high, p.price);
-        buckets[key].low = Math.min(buckets[key].low, p.price);
-        buckets[key].close = p.price;
-      }
-    });
-    const candles = Object.values(buckets).sort((a,b)=>a.t-b.t).slice(-20);
-    const labels = candles.map(c => { const d=new Date(c.t); return d.getMinutes()+':'+String(d.getSeconds()).padStart(2,'0'); });
-    miniChartInstance = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          data: candles.map(c => [c.low, c.high]),
-          backgroundColor: candles.map(c => c.close >= c.open ? '#26a69a44' : '#ef535044'),
-          borderColor: candles.map(c => c.close >= c.open ? '#26a69a' : '#ef5350'),
-          borderWidth: 1,
-          borderSkipped: false
-        },{
-          data: candles.map(c => [c.open, c.close]),
-          backgroundColor: candles.map(c => c.close >= c.open ? '#26a69a' : '#ef5350'),
-          borderColor: candles.map(c => c.close >= c.open ? '#26a69a' : '#ef5350'),
-          borderWidth: 1,
-          borderSkipped: false
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false, animation: false,
-        plugins: { legend: { display: false }, tooltip: { enabled: false } },
-        scales: { x: { display: false }, y: { display: false, grace: '5%' } }
-      }
-    });
+    // ── Candlestick via canvas ──
+    drawCandleCanvas(canvas, prices, yMin, yMax, yFmt);
   }
+}
+
+// ── Custom candlestick renderer ──
+function drawCandleCanvas(canvas, prices, yMin, yMax, yFmt){
+  // Build 30s buckets
+  const buckets = {};
+  chartPrices.forEach(p => {
+    const key = Math.floor(p.time / 30000) * 30000;
+    if(!buckets[key]){
+      buckets[key] = {open:p.price, high:p.price, low:p.price, close:p.price, t:key};
+    } else {
+      buckets[key].high  = Math.max(buckets[key].high, p.price);
+      buckets[key].low   = Math.min(buckets[key].low,  p.price);
+      buckets[key].close = p.price;
+    }
+  });
+  const candles = Object.values(buckets).sort((a,b)=>a.t-b.t).slice(-24);
+  if(candles.length < 1) return;
+
+  const wrap = canvas.parentElement;
+  const W = wrap.clientWidth  || 188;
+  const H = wrap.clientHeight || 80;
+  canvas.width  = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+
+  const allPrices = candles.flatMap(c=>[c.high,c.low]);
+  if(ptbFixed) allPrices.push(ptbFixed);
+  const lo = Math.min(...allPrices), hi = Math.max(...allPrices);
+  const range = hi - lo || 1;
+  const padPx = 4;
+  const PAD_L = 4, PAD_R = 48, PAD_T = 6, PAD_B = 18;
+  const plotW = W - PAD_L - PAD_R;
+  const plotH = H - PAD_T - PAD_B;
+
+  const toY = v => PAD_T + plotH - ((v - lo) / range) * plotH;
+  const n = candles.length;
+  const candleW = Math.max(3, Math.floor(plotW / n) - 2);
+  const spacing = plotW / n;
+
+  // Background
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid lines (horizontal)
+  ctx.strokeStyle = GRID_COLOR;
+  ctx.lineWidth = 0.5;
+  const ticks = 4;
+  for(let i=0; i<=ticks; i++){
+    const v = lo + (range * i / ticks);
+    const y = toY(v);
+    ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R, y); ctx.stroke();
+    // Y labels
+    ctx.fillStyle = TICK_COLOR;
+    ctx.font = `8px sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillText(yFmt(v), W - PAD_R + 4, y + 3);
+  }
+
+  // PTB dashed line
+  if(ptbFixed && ptbFixed >= lo && ptbFixed <= hi){
+    const py = toY(ptbFixed);
+    ctx.save();
+    ctx.strokeStyle = '#ef535099';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(PAD_L, py); ctx.lineTo(W - PAD_R, py); ctx.stroke();
+    ctx.restore();
+  }
+
+  // Candles
+  candles.forEach((c, i) => {
+    const x = PAD_L + i * spacing + spacing / 2;
+    const bull = c.close >= c.open;
+    const colSolid = bull ? '#26a69a' : '#ef5350';
+    const colFade  = bull ? '#26a69a55' : '#ef535055';
+
+    const yHigh  = toY(c.high);
+    const yLow   = toY(c.low);
+    const yOpen  = toY(c.open);
+    const yClose = toY(c.close);
+    const bodyTop    = Math.min(yOpen, yClose);
+    const bodyHeight = Math.max(1, Math.abs(yClose - yOpen));
+
+    // Wick
+    ctx.strokeStyle = colSolid;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, yHigh);
+    ctx.lineTo(x, yLow);
+    ctx.stroke();
+
+    // Body
+    ctx.fillStyle = colSolid;
+    ctx.strokeStyle = colSolid;
+    ctx.lineWidth = 1;
+    ctx.fillRect(x - candleW/2, bodyTop, candleW, bodyHeight);
+  });
+
+  // X labels — show first, middle, last
+  ctx.fillStyle = TICK_COLOR;
+  ctx.font = '8px sans-serif';
+  ctx.textAlign = 'center';
+  const showIdx = [0, Math.floor(n/2), n-1].filter((v,i,a)=>a.indexOf(v)===i);
+  showIdx.forEach(i => {
+    const c = candles[i];
+    const d = new Date(c.t);
+    const lbl = d.getHours()+':'+String(d.getMinutes()).padStart(2,'0');
+    const x = PAD_L + i * spacing + spacing / 2;
+    ctx.fillText(lbl, x, H - 4);
+  });
 }
 </script>
 </body>
