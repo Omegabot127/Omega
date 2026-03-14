@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>OMEGA v2.8 — BTC Predictor</title>
+<title>OMEGA v2.9 — BTC Predictor</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -159,7 +159,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:500px;backgro
       <div class="logo-icon">Ω</div>
       <div><div class="logo-name">OMEGA</div><div class="logo-sub">5-Min Predictor · Polymarket BTC/USD</div></div>
     </div>
-    <span class="ver">v2.8</span>
+    <span class="ver">v2.9</span>
   </div>
   <div class="notice gray" style="margin-top:8px"><div class="nd gray"></div>Las predicciones no son 100% precisas. Úsalas como referencia.</div>
   <div class="notice blue" style="margin-top:6px"><div class="nd blue"></div>Precio Chainlink en tiempo real — mismo feed que usa Polymarket.</div>
@@ -582,26 +582,45 @@ async function fetchBTCBinance(){
 async function fetchSlotOpenPrice(){
   const curSlot = getSlotKey();
 
-  // PASO 1: Ya fijado para este slot (mejor caso)
+  // PASO 1: Ya fijado para este slot
   if(ptbFixed && ptbSlotKey === curSlot){
     return { price: ptbFixed, source: 'Chainlink (Polymarket) ✓' };
   }
 
   const slotStart = curSlot * 1000;
   const secsIntoSlot = Math.floor((Date.now() - slotStart) / 1000);
-  console.log('[PTB] Buscando precio apertura del slot ('+secsIntoSlot+'s in)...');
 
-  // PASO 2: Revisar caché localStorage — guardado por el WS en sesiones anteriores
+  // PASO 2: Caché localStorage
   try {
     const slotCache = JSON.parse(localStorage.getItem('omega_slot_prices')||'{}');
     if(slotCache[curSlot] && slotCache[curSlot] > 0){
-      const cached = slotCache[curSlot];
-      console.log('[PTB] ✅ Desde caché localStorage:', cached);
-      return { price: cached, source: 'Chainlink (Polymarket) ✓' };
+      console.log('[PTB] ✅ Desde caché localStorage:', slotCache[curSlot]);
+      return { price: slotCache[curSlot], source: 'Chainlink (Polymarket) ✓' };
     }
   } catch(e) {}
 
-  // PASO 3: Si estamos en los primeros 10s, esperar al WS (llegará el precio de apertura)
+  // PASO 3: API de Polymarket past-results — closePrice del slot anterior = openPrice del slot actual
+  try {
+    const slotISO = new Date(curSlot * 1000).toISOString();
+    const url = `https://polymarket.com/api/past-results?symbol=BTC&variant=fiveminute&assetType=crypto&currentEventStartTime=${slotISO}&count=1`;
+    const d = await safeFetch(url);
+    if(d?.data?.results?.length > 0){
+      const lastResult = d.data.results[d.data.results.length - 1];
+      const openPrice = lastResult.closePrice;
+      if(openPrice > 0){
+        console.log('[PTB] ✅ Polymarket past-results:', openPrice);
+        // Guardar en caché
+        try {
+          const slotCache = JSON.parse(localStorage.getItem('omega_slot_prices')||'{}');
+          slotCache[curSlot] = openPrice;
+          localStorage.setItem('omega_slot_prices', JSON.stringify(slotCache));
+        } catch(e) {}
+        return { price: openPrice, source: 'Chainlink (Polymarket) ✓' };
+      }
+    }
+  } catch(e) { console.warn('[PTB] Polymarket API error:', e.message); }
+
+  // PASO 4: Si estamos en los primeros 10s, esperar WS
   if(secsIntoSlot < 10){
     const wsPrice = await waitChainlinkPrice(8000).catch(()=>null);
     if(wsPrice && wsPrice > 0){
@@ -610,30 +629,25 @@ async function fetchSlotOpenPrice(){
     }
   }
 
-  // PASO 4: Binance kline open (precio de apertura de la vela 5m)
+  // PASO 5: Binance kline open
   try{
     const d=await safeFetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=5m&startTime='+slotStart+'&limit=1');
     if(d?.length>0 && parseFloat(d[0][1]) > 0){
-      const openPrice = parseFloat(d[0][1]);
-      console.log('[PTB] Binance kline open:', openPrice);
-      return { price: openPrice, source: 'Binance open ~PTB' };
+      return { price: parseFloat(d[0][1]), source: 'Binance open ~PTB' };
     }
   }catch(e){}
 
-  // PASO 5: Coinbase candle open
+  // PASO 6: Coinbase candle open
   try{
     const d=await safeFetch('https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=300&start='+curSlot+'&end='+(curSlot+300));
     if(d?.length>0 && parseFloat(d[0][3]) > 0){
-      const openPrice = parseFloat(d[0][3]);
-      console.log('[PTB] Coinbase candle open:', openPrice);
-      return { price: openPrice, source: 'Coinbase open ~PTB' };
+      return { price: parseFloat(d[0][3]), source: 'Coinbase open ~PTB' };
     }
   }catch(e){}
 
-  // PASO 6: último recurso — precio actual Chainlink
+  // PASO 7: último recurso Chainlink actual
   const wsNow = await waitChainlinkPrice(3000).catch(()=>null);
   if(wsNow && wsNow > 0){
-    console.warn('[PTB] Fallback precio actual Chainlink ('+secsIntoSlot+'s in)');
     return { price: wsNow, source: 'Chainlink spot (fallback)' };
   }
 
