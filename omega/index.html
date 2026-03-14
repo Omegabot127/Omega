@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>OMEGA v2.9 — BTC Predictor</title>
+<title>OMEGA v3.0 — BTC Predictor</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -159,7 +159,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:500px;backgro
       <div class="logo-icon">Ω</div>
       <div><div class="logo-name">OMEGA</div><div class="logo-sub">5-Min Predictor · Polymarket BTC/USD</div></div>
     </div>
-    <span class="ver">v2.9</span>
+    <span class="ver">v3.0</span>
   </div>
   <div class="notice gray" style="margin-top:8px"><div class="nd gray"></div>Las predicciones no son 100% precisas. Úsalas como referencia.</div>
   <div class="notice blue" style="margin-top:6px"><div class="nd blue"></div>Precio Chainlink en tiempo real — mismo feed que usa Polymarket.</div>
@@ -471,6 +471,7 @@ async function fetchBTCBinance(){
 // ─── Chainlink precio via Polymarket RTDS WebSocket (browser nativo) ───
 // wss://ws-live-data.polymarket.com — sin autenticación, mismo precio que Polymarket
 let chainlinkPrice = null;
+let priceHistory = []; // {price, ts} ultimos 2 minutos
 let chainlinkTs = null;
 let rtdsWs = null;
 
@@ -507,6 +508,10 @@ function connectRTDS() {
             $('curVal').textContent = fmt(chainlinkPrice);
             $('curSub').textContent = 'Chainlink — ' + fmtTime();
             updateDiff();
+            // Guardar historial de precios intra-slot (últimos 2 min)
+            const now = Date.now();
+            priceHistory.push({price: chainlinkPrice, ts: now});
+            priceHistory = priceHistory.filter(p => now - p.ts < 120000); // 2 min
 
             // ── PTB en tiempo real ──
             const curSlotKey = getSlotKey();
@@ -703,6 +708,40 @@ function renderPoly(m){
 }
 
 // ─── Claude ───
+function getIntraSlotMomentum(){
+  // Analiza la dirección del precio en los últimos 2 minutos
+  if(priceHistory.length < 3) return { trend: 0, desc: 'sin datos', slope: 0 };
+  const now = Date.now();
+  const last30s = priceHistory.filter(p => now - p.ts < 30000);
+  const last60s = priceHistory.filter(p => now - p.ts < 60000);
+  const last120s = priceHistory;
+
+  // Calcular pendiente simple: precio actual vs precio hace N segundos
+  const calcSlope = (arr) => {
+    if(arr.length < 2) return 0;
+    return arr[arr.length-1].price - arr[0].price;
+  };
+
+  const slope30 = calcSlope(last30s);   // últimos 30s
+  const slope60 = calcSlope(last60s);   // último minuto
+  const slope120 = calcSlope(last120s); // últimos 2 min
+
+  // Señal combinada — más peso a lo reciente
+  const signal = slope30 * 3 + slope60 * 2 + slope120 * 1;
+  const trend = signal > 5 ? 1 : signal < -5 ? -1 : 0;
+
+  return {
+    trend,
+    slope30: slope30.toFixed(1),
+    slope60: slope60.toFixed(1),
+    slope120: slope120.toFixed(1),
+    signal: signal.toFixed(1),
+    desc: trend > 0 ? `precio subiendo (30s: +${slope30.toFixed(0)}, 60s: +${slope60.toFixed(0)})` :
+          trend < 0 ? `precio bajando (30s: ${slope30.toFixed(0)}, 60s: ${slope60.toFixed(0)})` :
+          'precio lateral'
+  };
+}
+
 function getRecentMomentum(){
   // Leer últimos 5 slots cerrados del historial para calcular momentum real
   try {
@@ -743,34 +782,40 @@ async function askClaude(btcPrice,change24h,polyData,fg){
   const secsLeft=Math.max(0,Math.floor((getNextSlotMs()-Date.now())/1000));
   const fearIdx=parseInt(fg.value||50);
 
-  // ── Momentum de slots recientes (señal más importante) ──
+  // ── Momentum de slots recientes ──
   const mom = getRecentMomentum();
+  // ── Momentum intra-slot (precio últimos 2 min) ──
+  const intra = getIntraSlotMomentum();
 
-  // ── Score compuesto sin Polymarket como dominante ──
+  // ── Score compuesto ──
   let bullPts = 0, bearPts = 0;
 
-  // 1. Momentum reciente (peso 4) — la señal más honesta
-  if(mom.trend > 0) bullPts += Math.min(4, mom.trend * 1.5);
-  else if(mom.trend < 0) bearPts += Math.min(4, Math.abs(mom.trend) * 1.5);
+  // 1. Momentum intra-slot (peso 5) — señal más inmediata y confiable
+  const intraSignal = parseFloat(intra.signal)||0;
+  if(intraSignal > 0) bullPts += Math.min(5, intraSignal/10);
+  else if(intraSignal < 0) bearPts += Math.min(5, Math.abs(intraSignal)/10);
 
-  // 2. Gap actual vs PTB (peso 3) — cuán lejos está el precio del target
-  // Ajustado por tiempo: con más tiempo, el gap importa menos
-  const timeWeight = secsLeft > 180 ? 1 : secsLeft > 120 ? 1.5 : secsLeft > 60 ? 2.5 : 4;
-  const gapScore = Math.min(3, Math.abs(pct) * 20 * (timeWeight/4));
+  // 2. Momentum slots recientes (peso 3)
+  if(mom.trend > 0) bullPts += Math.min(3, mom.trend * 1.2);
+  else if(mom.trend < 0) bearPts += Math.min(3, Math.abs(mom.trend) * 1.2);
+
+  // 3. Gap actual vs PTB ajustado por tiempo (peso 2)
+  const timeWeight = secsLeft > 180 ? 0.5 : secsLeft > 120 ? 1 : secsLeft > 60 ? 2 : 3.5;
+  const gapScore = Math.min(2, Math.abs(pct) * 20 * (timeWeight/4));
   if(diff > 0) bullPts += gapScore; else bearPts += gapScore;
 
-  // 3. Promedio de gap reciente (peso 2) — si el mercado sistemáticamente baja
+  // 4. Promedio gap reciente (peso 1.5)
   const avgGapNum = parseFloat(mom.avgGap)||0;
-  if(avgGapNum > 20) bullPts += 2;
-  else if(avgGapNum > 0) bullPts += 1;
-  else if(avgGapNum < -20) bearPts += 2;
-  else if(avgGapNum < 0) bearPts += 1;
+  if(avgGapNum > 20) bullPts += 1.5;
+  else if(avgGapNum > 0) bullPts += 0.75;
+  else if(avgGapNum < -20) bearPts += 1.5;
+  else if(avgGapNum < 0) bearPts += 0.75;
 
-  // 4. Polymarket (peso 1 solo) — ya no domina, es una señal más
-  const polyEdge = Math.abs(upPct - 50) / 50; // 0 a 1
-  if(upPct > downPct) bullPts += polyEdge; else bearPts += polyEdge;
+  // 5. Polymarket (peso 0.8) — señal de mercado secundaria
+  const polyEdge = Math.abs(upPct - 50) / 50;
+  if(upPct > downPct) bullPts += polyEdge * 0.8; else bearPts += polyEdge * 0.8;
 
-  // 5. Fear & Greed (peso 0.5)
+  // 6. Fear & Greed (peso 0.5)
   if(fearIdx < 30) bullPts += 0.5; else if(fearIdx > 70) bearPts += 0.5;
 
   const totalPts = bullPts + bearPts || 1;
@@ -783,7 +828,12 @@ async function askClaude(btcPrice,change24h,polyData,fg){
 SLOT ACTUAL (${secsLeft}s restantes):
 - BTC actual: ${fmt(btcPrice)} | PTB: ${fmt(ptb)} | Gap: ${diff>=0?'+':''}${diff.toFixed(2)} (${pct.toFixed(3)}%)
 
-MOMENTUM RECIENTE (últimos slots — señal más confiable):
+MOMENTUM INTRA-SLOT (precio últimos 2 minutos — señal más inmediata):
+- ${intra.desc}
+- Últimos 30s: ${intra.slope30} USD | Último minuto: ${intra.slope60} USD
+- Score intra-slot: ${intra.signal} (positivo=subiendo, negativo=bajando)
+
+MOMENTUM RECIENTE (últimos slots cerrados):
 - ${mom.desc}
 - Gaps individuales: ${mom.details||'—'}
 - Tendencia: ${mom.trend > 1 ? '📈 ALCISTA' : mom.trend < -1 ? '📉 BAJISTA' : '➡️ LATERAL'}
