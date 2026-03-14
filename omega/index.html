@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>OMEGA v1.7 — BTC Predictor</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#07080f;--s1:#0e0f1a;--s2:#12131f;--s3:#181926;
+  --border:rgba(255,255,255,0.07);--b2:rgba(255,255,255,0.04);
+  --accent:#f5a623;--a2:#e05c2a;
+  --green:#00e5a0;--red:#ff3b5c;--blue:#4c9fff;
+  --text:#edeaf3;--muted:#5a5b70;--dim:#2a2b3a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;min-height:100vh}
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:500px;background:radial-gradient(ellipse at 65% -10%,rgba(245,166,35,0.06) 0%,transparent 55%);pointer-events:none;z-index:0}
+.wrap{max-width:980px;margin:0 auto;padding:0 16px 60px;position:relative;z-index:1}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 0 10px;border-bottom:1px solid var(--b2)}
+.logo-row{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--a2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:15px;color:#000}
+.logo-name{font-family:'Syne',sans-serif;font-weight:800;font-size:16px;letter-spacing:.1em;background:linear-gradient(135deg,var(--accent),#fff 80%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.ver{background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:11px;color:var(--muted)}
+.notice{display:flex;align-items:center;gap:8px;padding:9px 14px;font-size:11px;margin-top:7px;border-radius:6px}
+.notice.gray{background:rgba(255,255,255,0.025);border:1px solid var(--b2);color:var(--muted)}
+.notice.blue{background:rgba(76,159,255,0.06);border:1px solid rgba(76,159,255,0.2);color:var(--blue)}
+.nd{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.nd.gray{background:var(--muted)}
+.nd.blue{background:var(--blue);box-shadow:0 0 6px var(--blue);animation:pulse 1.5s infinite}
+.sl{font-size:9px;letter-spacing:.18em;color:var(--muted);font-weight:600;text-transform:uppercase;margin:18px 0 10px}
+.status-panel{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px}
+.status-row{display:flex;align-items:center;gap:8px;font-size:11px;padding:3px 0}
+.sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;transition:all .3s}
+.sdot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.sdot.err{background:var(--red)}
+.sdot.spin{background:var(--accent);animation:pulse .8s infinite}
+.slot-wrap{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.slot-top{display:flex;justify-content:space-between;margin-bottom:7px}
+.slot-lbl{font-size:11px;color:var(--muted)}
+.slot-val{font-size:12px;color:var(--text);font-weight:600}
+.slot-bg{height:3px;background:var(--dim);border-radius:3px;overflow:hidden}
+.slot-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--a2));border-radius:3px;transition:width .9s linear}
+.ens-bar{background:rgba(76,159,255,0.06);border:1px solid rgba(76,159,255,0.2);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--blue);display:flex;align-items:center;gap:6px;margin-bottom:14px}
+.ens-dot{width:7px;height:7px;border-radius:50%;background:var(--blue);box-shadow:0 0 7px var(--blue);animation:pulse 1.5s infinite;flex-shrink:0}
+.price-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.pc{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+.pc-lbl{font-size:9px;letter-spacing:.12em;color:var(--muted);margin-bottom:8px}
+.pc-val{font-family:'Syne',sans-serif;font-weight:700;font-size:26px;letter-spacing:-.02em}
+.pc-val.orange{color:var(--accent);text-shadow:0 0 24px rgba(245,166,35,.35)}
+.pc-val.white{color:var(--text)}
+.pc-sub{font-size:10px;color:var(--muted);margin-top:4px}
+.diff-card{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px 18px;text-align:center;margin-bottom:14px}
+.diff-lbl{font-size:9px;letter-spacing:.12em;color:var(--muted);margin-bottom:5px}
+.diff-val{font-family:'Syne',sans-serif;font-weight:700;font-size:20px}
+.diff-val.pos{color:var(--green)}.diff-val.neg{color:var(--red)}.diff-val.wait{color:var(--muted)}
+.pred{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:8px}
+.pred.up{border-left:3px solid var(--green)}.pred.down{border-left:3px solid var(--red)}
+.pred-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px}
+.pred-verdict{font-family:'Syne',sans-serif;font-weight:800;font-size:28px;letter-spacing:.04em}
+.pred-verdict.up{color:var(--green)}.pred-verdict.down{color:var(--red)}
+.pred-lock{font-size:11px;color:var(--muted);background:var(--s3);border:1px solid var(--border);border-radius:5px;padding:3px 8px;margin-left:6px}
+.pred-desc{font-size:11px;color:var(--muted);margin-top:5px}
+.chips{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.chip{background:var(--s3);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600}
+.chip-lbl{font-size:9px;color:var(--muted);margin-right:5px;font-weight:400}
+.model-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.mc{background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:12px}
+.mc-name{font-size:9px;letter-spacing:.12em;color:var(--muted);margin-bottom:6px}
+.mc-dir{font-family:'Syne',sans-serif;font-weight:700;font-size:14px}
+.mc-dir.up{color:var(--green)}.mc-dir.down{color:var(--red)}
+.mc-pct{font-size:11px;color:var(--muted);margin-top:3px}
+.sig-table{width:100%;border-collapse:collapse}
+.sig-table tr{border-bottom:1px solid var(--b2)}
+.sig-table tr:last-child{border-bottom:none}
+.sig-table td{padding:8px 4px;font-size:11px;vertical-align:middle}
+.sig-name{color:var(--muted);width:130px}
+.sig-val{color:var(--text);white-space:nowrap;min-width:90px}
+.sig-bar-wrap{padding:0 10px}
+.sig-bg{height:3px;background:var(--dim);border-radius:3px;overflow:hidden}
+.sig-fill{height:100%;border-radius:3px;transition:width 1.2s ease}
+.sig-score{color:var(--muted);font-size:10px;text-align:right;padding-left:8px;width:32px}
+.cd-wrap{display:flex;flex-direction:column;align-items:center;gap:3px}
+.cd-sub{font-size:9px;color:var(--muted);letter-spacing:.1em}
+.cd-svg{transform:rotate(-90deg)}
+.ai-text{font-size:11px;line-height:1.7;color:rgba(237,234,243,.72)}
+.poly-item{background:var(--s2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:7px}
+.pi-q{font-size:12px;color:var(--text);line-height:1.4;margin-bottom:8px;font-weight:600}
+.pi-ptb{font-size:13px;color:var(--accent);font-weight:700;margin-bottom:10px}
+.pi-foot{display:flex;align-items:center;gap:8px}
+.pi-yes{font-size:11px;color:var(--green);font-weight:700;min-width:60px}
+.pi-no{font-size:11px;color:var(--red);font-weight:700;min-width:60px;text-align:right}
+.pi-bar{flex:1;height:6px;background:var(--dim);border-radius:5px;overflow:hidden;display:flex}
+.pi-y{height:100%;background:var(--green);transition:width .9s ease}
+.pi-n{height:100%;background:var(--red);transition:width .9s ease}
+.pi-vol{font-size:9px;color:var(--muted);margin-top:6px}
+.poly-src{font-size:9px;color:var(--muted);text-align:right;margin-top:4px}
+.poly-src a{color:var(--accent);text-decoration:none}
+
+/* ═══ HISTORIAL ═══ */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+@media(max-width:520px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+.stat-card{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:14px 12px;text-align:center}
+.stat-val{font-family:'Syne',sans-serif;font-weight:800;font-size:24px;margin-bottom:4px}
+.stat-val.g{color:var(--green)}.stat-val.r{color:var(--red)}.stat-val.a{color:var(--accent)}.stat-val.w{color:var(--text)}
+.stat-lbl{font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.stat-sub{font-size:10px;color:var(--muted);margin-top:3px}
+.hist-wrap{background:var(--s2);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:8px}
+.hist-hdr{display:grid;grid-template-columns:62px 68px 46px 90px 90px 76px 58px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--s3)}
+.hist-hdr span{font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.hist-row{display:grid;grid-template-columns:62px 68px 46px 90px 90px 76px 58px;padding:9px 12px;border-bottom:1px solid var(--b2);align-items:center;transition:background .15s}
+.hist-row:last-child{border-bottom:none}
+.hist-row:hover{background:rgba(255,255,255,0.02)}
+.hist-empty{padding:28px;text-align:center;color:var(--muted);font-size:11px;line-height:1.7}
+.badge{display:inline-block;border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700;letter-spacing:.04em}
+.badge.win{background:rgba(0,229,160,.1);color:var(--green);border:1px solid rgba(0,229,160,.2)}
+.badge.loss{background:rgba(255,59,92,.1);color:var(--red);border:1px solid rgba(255,59,92,.2)}
+.badge.pend{background:rgba(245,166,35,.1);color:var(--accent);border:1px solid rgba(245,166,35,.2)}
+.dir-u{color:var(--green);font-weight:700;font-size:11px}
+.dir-d{color:var(--red);font-weight:700;font-size:11px}
+.h-slot{font-size:10px;color:var(--muted)}
+.h-price{font-size:11px;color:var(--text)}
+.h-conf{font-size:10px;color:var(--muted)}
+.h-gap.p{color:var(--green);font-size:10px}
+.h-gap.n{color:var(--red);font-size:10px}
+.h-gap.m{color:var(--muted);font-size:10px}
+.clear-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 12px;font-size:10px;cursor:pointer;font-family:'JetBrains Mono',monospace;transition:all .2s;letter-spacing:.05em}
+.clear-btn:hover{border-color:var(--red);color:var(--red)}
+
+.sent-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+@media(min-width:600px){.sent-grid{grid-template-columns:repeat(6,1fr)}}
+.sc{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px 8px;text-align:center}
+.sc-lbl{font-size:8px;letter-spacing:.1em;color:var(--muted);margin-bottom:5px;text-transform:uppercase}
+.sc-val{font-family:'Syne',sans-serif;font-weight:700;font-size:11px}
+.sc-val.g{color:var(--green)}.sc-val.r{color:var(--red)}.sc-val.a{color:var(--accent)}.sc-val.m{color:var(--muted)}
+.ld{display:flex;align-items:center;gap:8px;padding:14px;font-size:11px;color:var(--muted);background:var(--s2);border-radius:8px}
+.dots span{display:inline-block;width:4px;height:4px;background:var(--accent);border-radius:50%;margin:0 2px;animation:bounce 1.2s infinite}
+.dots span:nth-child(2){animation-delay:.2s}.dots span:nth-child(3){animation-delay:.4s}
+@keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-4px);opacity:1}}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.7)}}
+.err{background:rgba(255,59,92,.08);border:1px solid rgba(255,59,92,.2);border-radius:8px;padding:12px;font-size:11px;color:var(--red)}
+.warn{background:rgba(245,166,35,.07);border:1px solid rgba(245,166,35,.2);border-radius:8px;padding:12px;font-size:11px;color:var(--accent)}
+.spin{animation:spin 1s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hdiv{height:1px;background:var(--b2);margin:18px 0}
+.refresh-btn{width:100%;background:linear-gradient(135deg,var(--accent),var(--a2));color:#000;border:none;border-radius:10px;padding:13px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;letter-spacing:.1em;cursor:pointer;transition:all .2s;margin-top:16px;box-shadow:0 4px 20px rgba(245,166,35,.25)}
+.refresh-btn:hover{transform:translateY(-1px);box-shadow:0 6px 28px rgba(245,166,35,.4)}
+.refresh-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="logo-row">
+      <div class="logo-icon">Ω</div>
+      <div><div class="logo-name">OMEGA</div><div class="logo-sub">5-Min Predictor · Polymarket BTC/USD</div></div>
+    </div>
+    <span class="ver">v2.7</span>
+  </div>
+  <div class="notice gray" style="margin-top:8px"><div class="nd gray"></div>Las predicciones no son 100% precisas. Úsalas como referencia.</div>
+  <div class="notice blue" style="margin-top:6px"><div class="nd blue"></div>Precio Chainlink en tiempo real — mismo feed que usa Polymarket.</div>
+
+  <div class="sl">Estado de Fuentes</div>
+  <div class="status-panel">
+    <div class="status-row"><div class="sdot spin" id="d1"></div><span id="l1">Polymarket BTC 5m — conectando...</span></div>
+    <div class="status-row"><div class="sdot spin" id="d2"></div><span id="l2">BTC Precio (Chainlink) — conectando...</span></div>
+    <div class="status-row"><div class="sdot spin" id="d3"></div><span id="l3">Fear &amp; Greed — conectando...</span></div>
+    <div class="status-row"><div class="sdot spin" id="d4"></div><span id="l4">IA (Claude) — en espera...</span></div>
+  </div>
+
+  <div class="sl">Market Status</div>
+  <div class="slot-wrap">
+    <div class="slot-top"><span class="slot-lbl">5m Next:</span><span class="slot-val" id="slotVal">—</span></div>
+    <div class="slot-bg"><div class="slot-fill" id="slotFill" style="width:0%"></div></div>
+  </div>
+  <div class="ens-bar"><div class="ens-dot"></div>Ensemble: <strong style="margin-left:4px">ACTIVE</strong>&nbsp;· Live mode</div>
+
+  <div class="price-grid">
+    <div class="pc">
+      <div class="pc-lbl">PRICE TO BEAT <span id="ptbEditBtn" onclick="togglePTBEdit()" style="cursor:pointer;font-size:9px;color:var(--accent);margin-left:6px;opacity:0.7">✏️ editar</span></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="pc-val white" id="ptbVal">—</div>
+        <input id="ptbInput" type="number" step="0.01"
+          style="display:none;background:#1a1730;border:1px solid var(--accent);color:#fff;font-family:JetBrains Mono,monospace;font-size:18px;font-weight:700;width:140px;padding:2px 8px;border-radius:6px;"
+          onkeydown="if(event.key==='Enter')applyPTBEdit()"
+          onblur="applyPTBEdit()"/>
+      </div>
+      <div class="pc-sub" id="ptbSub">Precio apertura del slot</div>
+    </div>
+    <div class="pc"><div class="pc-lbl">CURRENT PRICE</div><div class="pc-val orange" id="curVal">—</div><div class="pc-sub" id="curSub">Chainlink live...</div></div>
+  </div>
+  <div class="diff-card"><div class="diff-lbl">CURRENT VS TARGET</div><div class="diff-val wait" id="diffVal">Esperando datos...</div></div>
+
+  <div class="sl">Prediction</div>
+  <div id="predWrap" class="pred"><div class="ld"><div class="dots"><span></span><span></span><span></span></div>Analizando mercados...</div></div>
+
+  <div class="sl">Mercado — Bitcoin Up or Down 5 Min</div>
+  <div id="polyWrap"><div class="ld"><div class="dots"><span></span><span></span><span></span></div>Buscando mercado activo...</div></div>
+  <div class="poly-src">Datos de <a href="https://polymarket.com/crypto/5M" target="_blank">polymarket.com/crypto/5M</a></div>
+
+  <!-- ═══ HISTORIAL ═══ -->
+  <div class="sl">Historial de Predicciones</div>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-val g" id="hWinRate">—</div>
+      <div class="stat-lbl">Win Rate</div>
+      <div class="stat-sub" id="hRecord">0W / 0L</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val a" id="hStreak">—</div>
+      <div class="stat-lbl">Racha actual</div>
+      <div class="stat-sub" id="hStreakDir">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val w" id="hBest">—</div>
+      <div class="stat-lbl">Mejor racha WIN</div>
+      <div class="stat-sub">consecutivas</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val w" id="hTotal">0</div>
+      <div class="stat-lbl">Total slots</div>
+      <div class="stat-sub" id="hPending">0 pendientes</div>
+    </div>
+  </div>
+
+  <div class="hist-wrap">
+    <div class="hist-hdr">
+      <span>Slot</span>
+      <span>Dirección</span>
+      <span>Conf</span>
+      <span>PTB</span>
+      <span>Cierre</span>
+      <span>Gap final</span>
+      <span>Result</span>
+    </div>
+    <div id="histBody">
+      <div class="hist-empty">Aún no hay predicciones guardadas.<br>Se guardan automáticamente al inicio de cada slot. 🔄</div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+    <button class="clear-btn" onclick="clearHistory()">🗑 Borrar historial</button>
+  </div>
+
+  <div class="sl">Market Sentiment</div>
+  <div class="sent-grid">
+    <div class="sc"><div class="sc-lbl">Fear &amp; Greed</div><div class="sc-val m" id="s1">—</div></div>
+    <div class="sc"><div class="sc-lbl">Sentiment</div><div class="sc-val m" id="s2">—</div></div>
+    <div class="sc"><div class="sc-lbl">BTC Dom.</div><div class="sc-val m" id="s3">—</div></div>
+    <div class="sc"><div class="sc-lbl">Funding Rate</div><div class="sc-val m" id="s4">—</div></div>
+    <div class="sc"><div class="sc-lbl">Exchange Flow</div><div class="sc-val m" id="s5">—</div></div>
+    <div class="sc"><div class="sc-lbl">Whale Activity</div><div class="sc-val m" id="s6">—</div></div>
+  </div>
+
+  <div class="hdiv"></div>
+  <button class="refresh-btn" id="refreshBtn" onclick="runFull()">⟳ &nbsp;ACTUALIZAR PREDICCIÓN</button>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => n&&!isNaN(n)?'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+const fmtVol = n=>{if(!n||n<1)return'—';if(n>=1e9)return'$'+(n/1e9).toFixed(1)+'B';if(n>=1e6)return'$'+(n/1e6).toFixed(1)+'M';if(n>=1e3)return'$'+(n/1e3).toFixed(0)+'K';return'$'+n;};
+const fmtTime = ()=>{const d=new Date(),h=d.getHours(),m=String(d.getMinutes()).padStart(2,'0'),s=String(d.getSeconds()).padStart(2,'0');return`${h%12||12}:${m}:${s} ${h>=12?'PM':'AM'}`;};
+const fmtSlot = ts=>{const d=new Date(ts*1000),h=d.getHours()%12||12,m=String(d.getMinutes()).padStart(2,'0'),ap=d.getHours()>=12?'PM':'AM';return`${h}:${m} ${ap}`;};
+const ld = (id,msg)=>$(id).innerHTML=`<div class="ld"><div class="dots"><span></span><span></span><span></span></div>${msg}</div>`;
+const setDS = (n,ok,msg)=>{$(`d${n}`).className=`sdot ${ok?'ok':'err'}`;$(`l${n}`).textContent=msg;};
+
+// ─── Estado global ───
+let ptbFixed=null, ptbSlotKey=null, currentBTC=null;
+let polyRetryTimer=null;
+
+function getSlotKey(){return Math.floor(Date.now()/1000/300)*300;}
+function getNextSlotMs(){return getNextSlot().getTime();}
+function togglePTBEdit(){
+  const inp=$('ptbInput'), val=$('ptbVal');
+  if(inp.style.display==='none'){
+    inp.value = ptbFixed ? ptbFixed.toFixed(2) : '';
+    inp.style.display='block';
+    val.style.display='none';
+    inp.focus(); inp.select();
+  } else {
+    applyPTBEdit();
+  }
+}
+function applyPTBEdit(){
+  const inp=$('ptbInput'), val=$('ptbVal');
+  const v=parseFloat(inp.value);
+  if(v>0){
+    ptbFixed=v; ptbSlotKey=getSlotKey();
+    $('ptbVal').textContent=fmt(v);
+    $('ptbSub').textContent='Manual ✏️';
+    updateDiff();
+    console.log('[PTB] Manual:', v);
+  }
+  inp.style.display='none';
+  val.style.display='block';
+}
+
+function setPTB(price,source){
+  // Solo fijar PTB si no hay uno para este slot
+  const curSlot = getSlotKey();
+  if(ptbFixed && ptbSlotKey === curSlot) return; // ya fijado para este slot
+  ptbFixed=price;ptbSlotKey=curSlot;
+  $('ptbVal').textContent=fmt(ptbFixed);
+  $('ptbSub').textContent=source||'Apertura del slot';
+  console.log(`PTB fijado: ${price} (${source}) para slot ${curSlot}`);
+}
+function updateDiff(){
+  if(!ptbFixed||!currentBTC){$('diffVal').textContent='Esperando datos...';$('diffVal').className='diff-val wait';return;}
+  const diff=currentBTC-ptbFixed,pct=(diff/ptbFixed*100),s=diff>=0?'+':'';
+  $('diffVal').textContent=`${s}${fmt(diff)} (${s}${pct.toFixed(3)}%)`;
+  $('diffVal').className=`diff-val ${diff>=0?'pos':'neg'}`;
+}
+
+// ═══════════════════════════════════
+//  HISTORIAL — localStorage
+// ═══════════════════════════════════
+const HIST_KEY='omega_hist_v2';
+
+function loadHist(){
+  try{return JSON.parse(localStorage.getItem(HIST_KEY))||[];}
+  catch{return[];}
+}
+function saveHist(h){
+  try{localStorage.setItem(HIST_KEY,JSON.stringify(h.slice(-60)));}
+  catch(e){}
+}
+
+// Añade una nueva predicción al historial
+function addPrediction(pred, ptb, btcNow, polyData){
+  const h=loadHist();
+  const slotKey=getSlotKey();
+  // Evitar duplicar el mismo slot si ya hay uno PENDING
+  const last=h[h.length-1];
+  if(last && last.slotKey===slotKey && last.result==='PENDING') return;
+  h.push({
+    id: Date.now(),
+    slotKey,
+    slotLabel: fmtSlot(slotKey),
+    direction: pred.direction,
+    confidence: pred.confidence||0,
+    ptb: ptb||0,
+    priceAtPred: btcNow||0,
+    priceAtClose: null,
+    result: 'PENDING',
+    gapFinal: null,
+    polyUp: polyData?.upPct||'—',
+    polyDown: polyData?.downPct||'—',
+  });
+  saveHist(h);
+  renderHistory();
+}
+
+// Cierra el slot PENDING más reciente con el precio de cierre
+function closeLastSlot(closingPrice){
+  const h=loadHist();
+  for(let i=h.length-1;i>=0;i--){
+    if(h[i].result==='PENDING'){
+      const gap=closingPrice-h[i].ptb;
+      const won=(h[i].direction==='UP'&&closingPrice>=h[i].ptb)||(h[i].direction==='DOWN'&&closingPrice<h[i].ptb);
+      h[i].priceAtClose=closingPrice;
+      h[i].gapFinal=gap;
+      h[i].result=won?'WIN':'LOSS';
+      saveHist(h);
+      renderHistory();
+      // Flash de resultado
+      showResultFlash(won, h[i].slotLabel);
+      return;
+    }
+  }
+}
+
+// Toast de resultado
+function showResultFlash(won, slot){
+  const el=document.createElement('div');
+  el.style.cssText=`position:fixed;bottom:24px;right:24px;z-index:999;padding:14px 20px;border-radius:10px;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;animation:fadeInUp .3s ease;background:${won?'rgba(0,229,160,.15)':'rgba(255,59,92,.15)'};border:1px solid ${won?'rgba(0,229,160,.4)':'rgba(255,59,92,.4)'};color:${won?'#00e5a0':'#ff3b5c'}`;
+  el.textContent=`${won?'✅ WIN':'❌ LOSS'} — Slot ${slot}`;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),4000);
+}
+
+// Calcula estadísticas y renderiza tabla
+function renderHistory(){
+  const all=loadHist().slice().reverse();
+  const completed=all.filter(x=>x.result!=='PENDING');
+  const wins=completed.filter(x=>x.result==='WIN').length;
+  const losses=completed.filter(x=>x.result==='LOSS').length;
+  const pending=all.filter(x=>x.result==='PENDING').length;
+
+  // Win rate
+  const wr=completed.length>0?Math.round(wins/completed.length*100):null;
+  $('hWinRate').textContent=wr!==null?`${wr}%`:'—';
+  $('hWinRate').className=`stat-val ${wr===null?'w':wr>=60?'g':wr>=45?'a':'r'}`;
+  $('hRecord').textContent=`${wins}W / ${losses}L`;
+
+  // Racha actual (más reciente primero)
+  let streak=0,streakDir='';
+  for(const x of all){
+    if(x.result==='PENDING') continue;
+    if(streak===0){streak=1;streakDir=x.result;}
+    else if(x.result===streakDir) streak++;
+    else break;
+  }
+  $('hStreak').textContent=streak||'—';
+  $('hStreak').className=`stat-val ${streakDir==='WIN'?'g':streakDir==='LOSS'?'r':'a'}`;
+  $('hStreakDir').textContent=streak>0?`${streak}x ${streakDir}`:'Sin datos';
+
+  // Mejor racha de WINS
+  let bestWin=0,curWin=0;
+  for(const x of [...all].reverse()){
+    if(x.result==='PENDING') continue;
+    if(x.result==='WIN') curWin++;
+    else curWin=0;
+    if(curWin>bestWin) bestWin=curWin;
+  }
+  $('hBest').textContent=bestWin||'—';
+  $('hTotal').textContent=all.length;
+  $('hPending').textContent=`${pending} pendiente${pending!==1?'s':''}`;
+
+  // Tabla
+  if(!all.length){
+    $('histBody').innerHTML='<div class="hist-empty">Aún no hay predicciones guardadas.<br>Se guardan automáticamente al inicio de cada slot. 🔄</div>';
+    return;
+  }
+
+  $('histBody').innerHTML=all.slice(0,25).map(x=>{
+    const isUp=x.direction==='UP';
+    const closeCell=x.priceAtClose?`<span class="h-price">${fmt(x.priceAtClose)}</span>`:'<span style="color:var(--muted);font-size:10px">activo</span>';
+    const gapCell=x.gapFinal!=null
+      ?`<span class="h-gap ${x.gapFinal>=0?'p':'n'}">${x.gapFinal>=0?'+':''}${fmt(x.gapFinal)}</span>`
+      :'<span class="h-gap m">—</span>';
+    const badge=x.result==='WIN'?'<span class="badge win">WIN</span>':x.result==='LOSS'?'<span class="badge loss">LOSS</span>':'<span class="badge pend">PEND</span>';
+    return `<div class="hist-row">
+      <span class="h-slot">${x.slotLabel}</span>
+      <span class="${isUp?'dir-u':'dir-d'}">${isUp?'↑ UP':'↓ DOWN'}</span>
+      <span class="h-conf">${x.confidence}%</span>
+      <span class="h-price">${fmt(x.ptb)}</span>
+      ${closeCell}
+      ${gapCell}
+      ${badge}
+    </div>`;
+  }).join('');
+}
+
+function clearHistory(){
+  if(confirm('¿Borrar todo el historial de predicciones?')){
+    localStorage.removeItem(HIST_KEY);
+    renderHistory();
+  }
+}
+
+// ─── CORS fetch ───
+async function safeFetch(url){
+  try{const r=await fetch(url,{signal:AbortSignal.timeout(6000)});if(r.ok)return r.json();}catch(e){}
+  try{const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,{signal:AbortSignal.timeout(8000)});if(r.ok){const w=await r.json();return JSON.parse(w.contents);}}catch(e){}
+  const r=await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`,{signal:AbortSignal.timeout(8000)});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return r.json();
+}
+
+// ─── Binance ───
+async function fetchBTCBinance(){
+  try{const d=await safeFetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');return{usd:parseFloat(d.price),usd_24h_change:0};}catch(e){}
+  const d=await safeFetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true');
+  return d.bitcoin;
+}
+
+// ─── Chainlink precio via Polymarket RTDS WebSocket (browser nativo) ───
+// wss://ws-live-data.polymarket.com — sin autenticación, mismo precio que Polymarket
+let chainlinkPrice = null;
+let chainlinkTs = null;
+let rtdsWs = null;
+
+function connectRTDS() {
+  if (rtdsWs && rtdsWs.readyState === WebSocket.OPEN) return;
+  try {
+    rtdsWs = new WebSocket('wss://ws-live-data.polymarket.com');
+    let pingInterval = null;
+
+    rtdsWs.onopen = () => {
+      rtdsWs.send(JSON.stringify({
+        action: 'subscribe',
+        subscriptions: [{
+          topic: 'crypto_prices_chainlink',
+          type: '*',
+          filters: JSON.stringify({ symbol: 'btc/usd' })
+        }]
+      }));
+      // Mantener conexión viva con PING cada 5s
+      pingInterval = setInterval(() => {
+        if (rtdsWs.readyState === WebSocket.OPEN) rtdsWs.send('ping');
+      }, 5000);
+    };
+
+    rtdsWs.onmessage = (event) => {
+      if (event.data === 'pong') return;
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.topic === 'crypto_prices_chainlink' && msg.payload?.symbol === 'btc/usd') {
+          chainlinkPrice = parseFloat(msg.payload.value);
+          chainlinkTs = msg.payload.timestamp;
+          if (chainlinkPrice > 0) {
+            currentBTC = chainlinkPrice;
+            $('curVal').textContent = fmt(chainlinkPrice);
+            $('curSub').textContent = 'Chainlink — ' + fmtTime();
+            updateDiff();
+
+            // ── PTB en tiempo real ──
+            const curSlotKey = getSlotKey();
+            const slotAgeMs = Date.now() - (curSlotKey * 1000);
+
+            // Siempre guardar el último precio Chainlink por slot en localStorage
+            // Esto permite recuperar el PTB exacto aunque la página se cargue tarde
+            try {
+              const slotCache = JSON.parse(localStorage.getItem('omega_slot_prices')||'{}');
+              // Guardar precio del slot ANTERIOR (ese es el PTB del slot actual)
+              const prevSlotKey = curSlotKey - 300;
+              if (!slotCache[curSlotKey] && slotAgeMs < 8000) {
+                // Primer mensaje del nuevo slot = precio de apertura exacto
+                slotCache[curSlotKey] = chainlinkPrice;
+                // Limpiar slots viejos (guardar solo últimos 12)
+                const keys = Object.keys(slotCache).map(Number).sort((a,b)=>b-a);
+                keys.slice(12).forEach(k => delete slotCache[k]);
+                localStorage.setItem('omega_slot_prices', JSON.stringify(slotCache));
+                console.log('[CACHE] Guardado precio apertura slot', curSlotKey, ':', chainlinkPrice);
+              }
+            } catch(e) {}
+
+            if (!ptbFixed || ptbSlotKey !== curSlotKey) {
+              if (slotAgeMs < 12000) {
+                // Inicio real del slot — precio de apertura Chainlink exacto
+                ptbFixed = chainlinkPrice;
+                ptbSlotKey = curSlotKey;
+                $('ptbVal').textContent = fmt(ptbFixed);
+                $('ptbSub').textContent = 'Chainlink (Polymarket) ✓';
+                console.log('[PTB] ✅ Fijado al inicio del slot:', ptbFixed);
+                updateDiff();
+              }
+              // Si llegamos tarde al slot, NO sobreescribir — fetchSlotOpenPrice lo maneja
+            }
+          }
+        }
+      } catch(e) {}
+    };
+
+    rtdsWs.onclose = () => {
+      if (pingInterval) clearInterval(pingInterval);
+      // Reconectar tras 3s
+      setTimeout(connectRTDS, 3000);
+    };
+
+    rtdsWs.onerror = () => {
+      if (pingInterval) clearInterval(pingInterval);
+      rtdsWs.close();
+    };
+  } catch(e) {}
+}
+
+// Obtener precio Chainlink (espera hasta 5s por el WebSocket)
+function waitChainlinkPrice(maxMs = 5000) {
+  return new Promise((resolve, reject) => {
+    if (chainlinkPrice && chainlinkPrice > 0) { resolve(chainlinkPrice); return; }
+    const start = Date.now();
+    const iv = setInterval(() => {
+      if (chainlinkPrice && chainlinkPrice > 0) { clearInterval(iv); resolve(chainlinkPrice); }
+      else if (Date.now() - start > maxMs) { clearInterval(iv); reject(new Error('RTDS timeout')); }
+    }, 100);
+  });
+}
+
+// Fallback: Binance
+async function fetchBTCBinance(){
+  try{const d=await safeFetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');return{usd:parseFloat(d.price),usd_24h_change:0};}catch(e){}
+  const d=await safeFetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true');
+  return d.bitcoin;
+}
+
+// PTB = precio Chainlink al inicio del slot
+async function fetchSlotOpenPrice(){
+  const curSlot = getSlotKey();
+
+  // PASO 1: Ya fijado para este slot (mejor caso)
+  if(ptbFixed && ptbSlotKey === curSlot){
+    return { price: ptbFixed, source: 'Chainlink (Polymarket) ✓' };
+  }
+
+  const slotStart = curSlot * 1000;
+  const secsIntoSlot = Math.floor((Date.now() - slotStart) / 1000);
+  console.log('[PTB] Buscando precio apertura del slot ('+secsIntoSlot+'s in)...');
+
+  // PASO 2: Revisar caché localStorage — guardado por el WS en sesiones anteriores
+  try {
+    const slotCache = JSON.parse(localStorage.getItem('omega_slot_prices')||'{}');
+    if(slotCache[curSlot] && slotCache[curSlot] > 0){
+      const cached = slotCache[curSlot];
+      console.log('[PTB] ✅ Desde caché localStorage:', cached);
+      return { price: cached, source: 'Chainlink (Polymarket) ✓' };
+    }
+  } catch(e) {}
+
+  // PASO 3: Si estamos en los primeros 10s, esperar al WS (llegará el precio de apertura)
+  if(secsIntoSlot < 10){
+    const wsPrice = await waitChainlinkPrice(8000).catch(()=>null);
+    if(wsPrice && wsPrice > 0){
+      console.log('[PTB] ✅ Chainlink WS inicio de slot:', wsPrice);
+      return { price: wsPrice, source: 'Chainlink (Polymarket) ✓' };
+    }
+  }
+
+  // PASO 4: Binance kline open (precio de apertura de la vela 5m)
+  try{
+    const d=await safeFetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=5m&startTime='+slotStart+'&limit=1');
+    if(d?.length>0 && parseFloat(d[0][1]) > 0){
+      const openPrice = parseFloat(d[0][1]);
+      console.log('[PTB] Binance kline open:', openPrice);
+      return { price: openPrice, source: 'Binance open ~PTB' };
+    }
+  }catch(e){}
+
+  // PASO 5: Coinbase candle open
+  try{
+    const d=await safeFetch('https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=300&start='+curSlot+'&end='+(curSlot+300));
+    if(d?.length>0 && parseFloat(d[0][3]) > 0){
+      const openPrice = parseFloat(d[0][3]);
+      console.log('[PTB] Coinbase candle open:', openPrice);
+      return { price: openPrice, source: 'Coinbase open ~PTB' };
+    }
+  }catch(e){}
+
+  // PASO 6: último recurso — precio actual Chainlink
+  const wsNow = await waitChainlinkPrice(3000).catch(()=>null);
+  if(wsNow && wsNow > 0){
+    console.warn('[PTB] Fallback precio actual Chainlink ('+secsIntoSlot+'s in)');
+    return { price: wsNow, source: 'Chainlink spot (fallback)' };
+  }
+
+  return null;
+}
+
+// ─── Polymarket ───
+async function fetchPolyBTC5m(){
+  const curSlot=Math.floor(Date.now()/1000/300)*300;
+  // URL directa del evento activo
+  const eventUrl = `https://polymarket.com/event/btc-updown-5m-${curSlot}`;
+
+  for(const slug of [`btc-updown-5m-${curSlot}`,`btc-updown-5m-${curSlot-300}`,`btc-updown-5m-${curSlot+300}`]){
+    try{
+      let data=await safeFetch(`https://gamma-api.polymarket.com/events?slug=${slug}`);
+      if(!Array.isArray(data))data=data.data||data.events||[];
+      if(!data.length)continue;
+      const event=data[0],market=event.markets?.[0]||event;
+      const prices=JSON.parse(market.outcomePrices||'[0.5,0.5]');
+      const activeSlot = parseInt(slug.split('-').pop());
+      return{
+        question:event.title||market.question||slug,
+        upPct:(parseFloat(prices[0])*100).toFixed(1),
+        downPct:(parseFloat(prices[1])*100).toFixed(1),
+        volume:parseFloat(market.volume||event.volume||0),
+        slug,
+        url:`https://polymarket.com/event/${slug}`
+      };
+    }catch(e){continue;}
+  }
+  throw new Error('No se encontró mercado BTC 5m activo');
+}
+
+// ─── Fear & Greed ───
+async function fetchFG(){
+  try{return(await safeFetch('https://api.alternative.me/fng/?limit=1')).data[0];}
+  catch{return{value:'—',value_classification:'Unknown'};}
+}
+
+// ─── Render Polymarket ───
+function renderPoly(m){
+  $('polyWrap').innerHTML=`<div class="poly-item">
+    <div class="pi-q">${m.question}</div>
+    ${ptbFixed?`<div class="pi-ptb">📍 Price to Beat: ${fmt(ptbFixed)}</div>`:''}
+    <div class="pi-foot">
+      <span class="pi-yes">↑ UP ${m.upPct}%</span>
+      <div class="pi-bar"><div class="pi-y" style="width:${m.upPct}%"></div><div class="pi-n" style="width:${m.downPct}%"></div></div>
+      <span class="pi-no">${m.downPct}% DOWN ↓</span>
+    </div>
+    ${m.volume>0?`<div class="pi-vol">Vol: ${fmtVol(m.volume)}</div>`:''}
+    <div style="margin-top:8px"><a href="${m.url}" target="_blank" style="font-size:10px;color:var(--accent);text-decoration:none">→ Ver en Polymarket</a></div>
+  </div>`;
+}
+
+// ─── Claude ───
+function getRecentMomentum(){
+  // Leer últimos 5 slots cerrados del historial para calcular momentum real
+  try {
+    const hist = JSON.parse(localStorage.getItem('omega_hist_v2')||'[]');
+    const closed = hist.filter(h => h.result && h.result !== 'PENDING' && h.priceAtClose && h.ptb);
+    const last5 = closed.slice(0,5);
+    if(last5.length === 0) return { trend: 0, wins: 0, losses: 0, avgGap: 0, desc: 'sin datos' };
+
+    let upCount = 0, downCount = 0, totalGap = 0;
+    const details = [];
+    last5.forEach(h => {
+      const gap = h.priceAtClose - h.ptb;
+      totalGap += gap;
+      if(gap >= 0) upCount++; else downCount++;
+      details.push((gap>=0?'+':'')+gap.toFixed(0));
+    });
+
+    const avgGap = totalGap / last5.length;
+    const trend = upCount - downCount; // positivo = alcista, negativo = bajista
+    return {
+      trend,
+      upCount,
+      downCount,
+      avgGap: avgGap.toFixed(1),
+      desc: `últimos ${last5.length} slots: ${upCount} subieron / ${downCount} bajaron, gap promedio ${avgGap>=0?'+':''}${avgGap.toFixed(0)}`,
+      details: details.join(', ')
+    };
+  } catch(e) {
+    return { trend: 0, upCount: 0, downCount: 0, avgGap: 0, desc: 'error leyendo historial' };
+  }
+}
+
+async function askClaude(btcPrice,change24h,polyData,fg){
+  const ptb=ptbFixed||btcPrice||0,diff=btcPrice?(btcPrice-ptb):0;
+  const pct=ptb?(diff/ptb*100):0;
+  const upPct=parseFloat(polyData?.upPct||50);
+  const downPct=parseFloat(polyData?.downPct||50);
+  const secsLeft=Math.max(0,Math.floor((getNextSlotMs()-Date.now())/1000));
+  const fearIdx=parseInt(fg.value||50);
+
+  // ── Momentum de slots recientes (señal más importante) ──
+  const mom = getRecentMomentum();
+
+  // ── Score compuesto sin Polymarket como dominante ──
+  let bullPts = 0, bearPts = 0;
+
+  // 1. Momentum reciente (peso 4) — la señal más honesta
+  if(mom.trend > 0) bullPts += Math.min(4, mom.trend * 1.5);
+  else if(mom.trend < 0) bearPts += Math.min(4, Math.abs(mom.trend) * 1.5);
+
+  // 2. Gap actual vs PTB (peso 3) — cuán lejos está el precio del target
+  // Ajustado por tiempo: con más tiempo, el gap importa menos
+  const timeWeight = secsLeft > 180 ? 1 : secsLeft > 120 ? 1.5 : secsLeft > 60 ? 2.5 : 4;
+  const gapScore = Math.min(3, Math.abs(pct) * 20 * (timeWeight/4));
+  if(diff > 0) bullPts += gapScore; else bearPts += gapScore;
+
+  // 3. Promedio de gap reciente (peso 2) — si el mercado sistemáticamente baja
+  const avgGapNum = parseFloat(mom.avgGap)||0;
+  if(avgGapNum > 20) bullPts += 2;
+  else if(avgGapNum > 0) bullPts += 1;
+  else if(avgGapNum < -20) bearPts += 2;
+  else if(avgGapNum < 0) bearPts += 1;
+
+  // 4. Polymarket (peso 1 solo) — ya no domina, es una señal más
+  const polyEdge = Math.abs(upPct - 50) / 50; // 0 a 1
+  if(upPct > downPct) bullPts += polyEdge; else bearPts += polyEdge;
+
+  // 5. Fear & Greed (peso 0.5)
+  if(fearIdx < 30) bullPts += 0.5; else if(fearIdx > 70) bearPts += 0.5;
+
+  const totalPts = bullPts + bearPts || 1;
+  const bullPct = (bullPts / totalPts * 100);
+  const direction = bullPct >= 50 ? 'UP' : 'DOWN';
+  const confidence = Math.round(50 + Math.abs(bullPct - 50) * 0.8);
+
+  const prompt = `Eres un trader experto en BTC. Valida y ajusta esta predicción basándote en los datos.
+
+SLOT ACTUAL (${secsLeft}s restantes):
+- BTC actual: ${fmt(btcPrice)} | PTB: ${fmt(ptb)} | Gap: ${diff>=0?'+':''}${diff.toFixed(2)} (${pct.toFixed(3)}%)
+
+MOMENTUM RECIENTE (últimos slots — señal más confiable):
+- ${mom.desc}
+- Gaps individuales: ${mom.details||'—'}
+- Tendencia: ${mom.trend > 1 ? '📈 ALCISTA' : mom.trend < -1 ? '📉 BAJISTA' : '➡️ LATERAL'}
+
+POLYMARKET: UP ${upPct}% / DOWN ${downPct}% (señal secundaria, muchas veces rezagada)
+
+SCORE CALCULADO: bullish ${bullPts.toFixed(1)} vs bearish ${bearPts.toFixed(1)} → ${direction} ${confidence}%
+
+REGLAS:
+- Si el momentum de los últimos 3+ slots es consistentemente bajista, DOWN tiene prioridad
+- El gap actual con ${secsLeft}s restantes: ${Math.abs(pct)<0.05?'pequeño, cualquier dirección posible':Math.abs(pct)<0.15?'moderado, necesita momentum':'grande, difícil de revertir'}
+- Polymarket suele rezagarse — si el mercado ya lleva 3 slots bajando, el 72% UP de Polymarket está desactualizado
+
+Responde SOLO con JSON sin markdown:
+{"direction":"${direction}","confidence":${confidence},"ptbPrice":${Math.round(ptb)},"gap":${diff.toFixed(2)},"bullScore":${bullPts.toFixed(1)},"bearScore":${bearPts.toFixed(1)},"lstmDir":"${direction}","lstmPct":${bullPct.toFixed(1)},"techDir":"${direction}","techPct":${bullPct.toFixed(1)},"hybridDir":"${direction}","hybridPct":${bullPct.toFixed(1)},"pattern":null,"signals":[{"name":"Momentum slots","value":"${mom.upCount}↑ ${mom.downCount}↓","score":${Math.min(5,Math.abs(mom.trend)*1.5).toFixed(2)},"bullish":${mom.trend>=0}},{"name":"Gap vs PTB","value":"${diff>=0?'+':''}${diff.toFixed(0)}","score":${gapScore.toFixed(2)},"bullish":${diff>=0}},{"name":"Gap promedio","value":"${avgGapNum>=0?'+':''}${avgGapNum}","score":${Math.min(5,Math.abs(avgGapNum)/20).toFixed(2)},"bullish":${avgGapNum>=0}},{"name":"Polymarket","value":"UP ${upPct}%","score":${(polyEdge*2).toFixed(2)},"bullish":${upPct>=50}},{"name":"Fear & Greed","value":"${fearIdx}/100","score":${(Math.abs(fearIdx-50)/20).toFixed(2)},"bullish":${fearIdx<50}}],"sentiment":"${fearIdx<35?'Fear':fearIdx>65?'Greed':'Neutral'}","fundingRate":"0.0000%","exchangeFlow":"NEUTRAL","whaleActivity":"LOW","analysis":"2 oraciones en español: explica la predicción ${direction} basándote principalmente en el momentum (${mom.desc}) y el gap actual de ${diff.toFixed(0)} con ${secsLeft}s restantes."}`;
+
+  const res=await fetch('http://64.176.9.75:3000/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error||`Error ${res.status}`);}
+  const data=await res.json();
+  if(data.error)throw new Error(data.error);
+  const raw=data.text.replace(/```json|```/g,'').trim();
+  const match=raw.match(/\{[\s\S]*\}/);
+  if(!match)throw new Error('Respuesta inválida de IA');
+  return JSON.parse(match[0]);
+}
+
+// ─── Render predicción ───
+function renderPred(pred){
+  const up=pred.direction==='UP';
+  const gs=(pred.gap||0)>=0?'+':'-',ga=Math.abs(pred.gap||0).toFixed(2);
+  const secs=Math.max(15,Math.floor((getNextSlot()-new Date())/1000));
+  $('predWrap').className=`pred ${up?'up':'down'}`;
+  $('predWrap').innerHTML=`
+    <div class="pred-hdr">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:22px;color:${up?'var(--green)':'var(--red)'}">${up?'↑':'↓'}</span>
+          <span class="pred-verdict ${up?'up':'down'}">${pred.direction}</span>
+          <span class="pred-lock">🔒 LOCKED</span>
+        </div>
+        <div class="pred-desc">Will beat ${fmt(pred.ptbPrice)} · ${gs}$${ga} gap · ${secs}s left</div>
+      </div>
+      <div class="cd-wrap" id="cdWrap"></div>
+    </div>
+    <div class="chips">
+      <div class="chip"><span class="chip-lbl">CONFIDENCE</span>${pred.confidence}%</div>
+      <div class="chip"><span class="chip-lbl">GAP</span><span style="color:${(pred.gap||0)>=0?'var(--green)':'var(--red)'}">${gs}$${ga}</span></div>
+    </div>
+    <div class="model-grid">
+      ${[['LSTM',pred.lstmDir,pred.lstmPct],['TECHNICAL',pred.techDir,pred.techPct],['HYBRID',pred.hybridDir,pred.hybridPct]].map(([n,d,p])=>`
+        <div class="mc"><div class="mc-name">${n}</div>
+        <div class="mc-dir ${(d||'UP')==='UP'?'up':'down'}">${(d||'UP')==='UP'?'↑':'↓'} ${d||'—'}</div>
+        <div class="mc-pct">${p?p.toFixed(1):'—'}%</div></div>`).join('')}
+    </div>
+    ${pred.pattern?`<div class="pattern">📊 ${pred.pattern}</div>`:''}
+    <div class="sl" style="margin-top:0">Signal Breakdown</div>
+    <table class="sig-table">
+      ${(pred.signals||[]).map(s=>{const c=s.bullish?'var(--green)':'var(--red)';return`<tr><td class="sig-name">${s.name}</td><td class="sig-val">${s.value}</td><td class="sig-bar-wrap"><div class="sig-bg"><div class="sig-fill" style="width:${Math.min(100,(s.score/5)*100)}%;background:${c}"></div></div></td><td class="sig-score">${Number(s.score).toFixed(2)}</td></tr>`;}).join('')}
+    </table>
+    <div class="hdiv"></div>
+    <div class="sl" style="margin-bottom:6px">Análisis IA</div>
+    <div id="aiText" class="ai-text"></div>`;
+  startCountdown(secs,pred.direction);
+  const words=(pred.analysis||'').split(' '),el=$('aiText');
+  if(el){let i=0;const iv=setInterval(()=>{if(i<words.length){el.innerHTML+=(i>0?' ':'')+words[i];i++;}else clearInterval(iv);},60);}
+}
+
+function renderSent(pred,fg){
+  const fgV=parseInt(fg.value)||0;
+  $('s1').textContent=`${fg.value} — ${fg.value_classification}`;$('s1').className=`sc-val ${fgV>60?'g':fgV>35?'a':'r'}`;$('s1').style.fontSize='10px';
+  $('s2').textContent=pred.sentiment||'—';$('s2').className=`sc-val ${pred.sentiment==='Fearful'?'r':pred.sentiment==='Greedy'?'g':'a'}`;
+  $('s3').textContent='—';$('s3').className='sc-val a';
+  $('s4').textContent=pred.fundingRate||'—';$('s4').className='sc-val a';
+  const fl=(pred.exchangeFlow||'').toUpperCase();$('s5').textContent=fl||'—';$('s5').className=`sc-val ${fl==='INFLOW'?'g':fl==='OUTFLOW'?'r':'a'}`;
+  const wh=(pred.whaleActivity||'LOW').toUpperCase();$('s6').textContent=wh;$('s6').className=`sc-val ${wh==='HIGH'?'g':wh==='MEDIUM'?'a':'m'}`;
+}
+
+// ─── Slot timer con auto-close + auto-refresh ───
+let slotTimer=null, lastSlotKey=null;
+function getNextSlot(){
+  const n=new Date(),m=n.getMinutes(),nm=(Math.floor(m/5)+1)*5,next=new Date(n);
+  if(nm>=60){next.setHours(next.getHours()+1);next.setMinutes(0,0,0);}
+  else next.setMinutes(nm,0,0);
+  return next;
+}
+function startSlotTimer(){
+  if(slotTimer)clearInterval(slotTimer);
+  lastSlotKey=getSlotKey();
+  slotTimer=setInterval(()=>{
+    const now=new Date(),next=getNextSlot(),rem=Math.max(0,next-now),total=300000;
+    const pct=((total-rem)/total*100).toFixed(1);
+    const m=Math.floor(rem/60000),s=Math.floor((rem%60000)/1000);
+    const nh=next.getHours()%12||12,nm2=String(next.getMinutes()).padStart(2,'0'),ap=next.getHours()>=12?'PM':'AM';
+    $('slotVal').textContent=`${nh}:${nm2} ${ap} (${m}m ${String(s).padStart(2,'0')}s)`;
+    $('slotFill').style.width=pct+'%';
+
+    const curKey=getSlotKey();
+    if(curKey!==lastSlotKey){
+      // Slot nuevo: cerrar el anterior con precio actual
+      if(currentBTC) closeLastSlot(currentBTC);
+      lastSlotKey=curKey;
+      ptbFixed=null;
+      ptbSlotKey=null;
+      if(polyRetryTimer){clearInterval(polyRetryTimer);polyRetryTimer=null;}
+      runFull();
+    }
+  },1000);
+}
+
+// ─── Countdown ───
+let cdTimer=null;
+function startCountdown(total,dir){
+  if(cdTimer)clearInterval(cdTimer);
+  let s=total;const r=22,C=2*Math.PI*r,up=dir==='UP';
+  const draw=()=>{
+    const el=$('cdWrap');if(!el)return;
+    const off=C*(1-Math.max(0,s)/total);
+    el.innerHTML=`<svg class="cd-svg" width="56" height="56" viewBox="0 0 56 56">
+      <circle cx="28" cy="28" r="${r}" fill="none" stroke="#2a2b3a" stroke-width="4"/>
+      <circle cx="28" cy="28" r="${r}" fill="none" stroke="${up?'#00e5a0':'#ff3b5c'}" stroke-width="4"
+        stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}"/>
+      <text x="28" y="28" text-anchor="middle" dominant-baseline="middle"
+        font-family="Syne,sans-serif" font-weight="700" font-size="12" fill="#edeaf3"
+        transform="rotate(90,28,28)">${s}</text>
+    </svg><div class="cd-sub">SLOT LEFT</div>`;
+  };
+  draw();cdTimer=setInterval(()=>{if(s>0){s--;draw();}else clearInterval(cdTimer);},1000);
+}
+
+// ─── MAIN ───
+async function runFull(){
+  const btn=$('refreshBtn');
+  btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span> &nbsp;ACTUALIZANDO...';
+  ld('predWrap','Conectando...');
+  ['d1','d2','d3','d4'].forEach(id=>{$(id).className='sdot spin';});
+
+  let btcPrice=null,change24h=0,polyData=null,fg={value:'—',value_classification:'Unknown'};
+
+  // PTB desde Chainlink (mismo que Polymarket)
+  if(!ptbFixed){
+    try{
+      const result = await fetchSlotOpenPrice();
+      if(result && result.price > 0) setPTB(result.price, result.source);
+    }catch(e){}
+  }
+
+  // BTC precio actual — Chainlink (ya llega via WebSocket), fallback Binance
+  try{
+    let price = chainlinkPrice;
+    let src = 'Chainlink';
+    if(!price || price <= 0) {
+      const btc = await fetchBTCBinance();
+      price = btc.usd; change24h = btc.usd_24h_change||0; src = 'Binance';
+    }
+    btcPrice = price; currentBTC = price;
+    $('curVal').textContent = fmt(price);
+    $('curSub').textContent = src + ' — ' + fmtTime();
+    if(!ptbFixed) setPTB(price, src + ' spot');
+    updateDiff();
+    setDS(2, true, `BTC — ${fmt(price)} (${src}) ✓`);
+  }catch(e){setDS(2,false,`BTC — ${e.message}`);}
+
+  // Fear & Greed
+  try{fg=await fetchFG();setDS(3,true,`Fear & Greed — ${fg.value} (${fg.value_classification}) ✓`);}
+  catch(e){setDS(3,false,'Fear & Greed — Error');}
+
+  // Polymarket
+  try{
+    ld('polyWrap','Buscando mercado BTC 5m...');
+    polyData=await fetchPolyBTC5m();
+    renderPoly(polyData);
+    setDS(1,true,`Polymarket — UP ${polyData.upPct}% / DOWN ${polyData.downPct}% ✓`);
+    if(polyRetryTimer){clearInterval(polyRetryTimer);polyRetryTimer=null;}
+  }catch(e){
+    setDS(1,false,`Polymarket — ${e.message}`);
+    $('polyWrap').innerHTML=`<div class="warn">⚠ ${e.message} — reintentando...</div>`;
+    // Reintentar solo Polymarket cada 30s hasta encontrar el mercado
+    if(!polyRetryTimer){
+      polyRetryTimer=setInterval(async()=>{
+        try{
+          const pd=await fetchPolyBTC5m();
+          renderPoly(pd);
+          setDS(1,true,`Polymarket — UP ${pd.upPct}% / DOWN ${pd.downPct}% ✓`);
+          clearInterval(polyRetryTimer);polyRetryTimer=null;
+        }catch(err){
+          setDS(1,false,`Polymarket — ${err.message}`);
+          $('polyWrap').innerHTML=`<div class="warn">⚠ ${err.message} — reintentando...</div>`;
+        }
+      },30000);
+    }
+  }
+
+  // Claude IA
+  try{
+    $('d4').className='sdot spin';$('l4').textContent='IA — generando predicción...';
+    ld('predWrap','Generando predicción con IA...');
+    const pred=await askClaude(btcPrice,change24h,polyData,fg);
+
+    // Sanity check: solo actuar si el gap es REALMENTE imposible Y Polymarket no dice lo contrario
+    const secsLeft2=Math.max(0,Math.floor((getNextSlotMs()-Date.now())/1000));
+    const gap2=btcPrice&&ptbFixed?btcPrice-ptbFixed:0;
+    const gapPct2=ptbFixed?Math.abs(gap2/ptbFixed*100):0;
+    const polyUp2=parseFloat(polyData?.upPct||50);
+    // Solo forzar DOWN si: gap negativo grande + poco tiempo + Polymarket también dice DOWN
+    const impossibleGap = secsLeft2<60&&gapPct2>0.25 || secsLeft2<30&&gapPct2>0.12 || secsLeft2<15&&gapPct2>0.05;
+    const crowdAlsoDn = polyUp2 < 45; // Polymarket también bajista
+    if(gap2<0 && impossibleGap && crowdAlsoDn){
+      console.warn('[SANITY] Gap imposible + crowd bearish → DOWN');
+      pred.direction='DOWN';
+      pred.confidence=Math.min(pred.confidence||65,85);
+    }
+
+    renderPred(pred);
+    renderSent(pred,fg);
+    addPrediction(pred,ptbFixed,btcPrice,polyData);
+    setDS(4,true,'IA (Claude) — ✓');
+  }catch(e){
+    setDS(4,false,`IA — ${e.message}`);
+    $('predWrap').innerHTML=`<div class="err">⚠ Error IA: ${e.message}</div>`;
+  }
+
+  btn.disabled=false;btn.innerHTML='⟳ &nbsp;ACTUALIZAR PREDICCIÓN';
+}
+
+// Fallback: si RTDS no actualiza en 15s, usar Binance
+setInterval(async()=>{
+  // El precio ya se actualiza via rtdsWs.onmessage en tiempo real
+  // Este intervalo solo es fallback si el WebSocket no está conectado
+  if (!rtdsWs || rtdsWs.readyState !== WebSocket.OPEN) {
+    try{
+      const btc = await fetchBTCBinance();
+      currentBTC = btc.usd;
+      $('curVal').textContent = fmt(btc.usd);
+      $('curSub').textContent = 'Binance (fallback) — ' + fmtTime();
+      updateDiff();
+    }catch(e){}
+  }
+},15000);
+
+// Init
+connectRTDS(); // Conectar WebSocket Chainlink inmediatamente
+renderHistory();
+startSlotTimer();
+runFull();
+</script>
+</body>
+</html>
