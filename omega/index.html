@@ -1609,13 +1609,17 @@ function renderPred(pred){
   const secs=Math.max(15,Math.floor((getNextSlot()-new Date())/1000));
   const sq=(pred.signalQuality||'DEBIL').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   const sqLabel=pred.signalQuality||'DÉBIL';
-  $('predWrap').className=`pred ${neutral?'neutral':up?'up':'down'}`;
+  const dirIcon = neutral ? '⚠️' : up ? '↑' : '↓';
+  const dirColor = neutral ? 'var(--gold)' : up ? 'var(--green)' : 'var(--red)';
+  const dirClass = neutral ? 'neutral' : up ? 'up' : 'down';
+  const dirLabel = neutral ? 'NEUTRAL' : pred.direction;
+  $('predWrap').className=`pred ${dirClass}`;
   $('predWrap').innerHTML=`
     <div class="pred-hdr">
       <div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:22px;color:${neutral?'var(--gold)':up?'var(--green)':'var(--red)'}">\${neutral?'⚠':up?'↑':'↓'}</span>
-          <span class="pred-verdict ${neutral?'neutral':up?'up':'down'}">${neutral?'NEUTRAL':pred.direction}</span>
+          <span style="font-size:22px;color:${dirColor}">${dirIcon}</span>
+          <span class="pred-verdict ${dirClass}">${dirLabel}</span>
           <span class="pred-lock">🔒 LOCKED</span>
           <span class="signal-quality ${sq}">${sqLabel}</span>
         </div>
