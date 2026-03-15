@@ -1567,7 +1567,7 @@ function renderPred(pred){
     <div class="pred-hdr">
       <div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:22px;color:${neutral?'var(--gold)':up?'var(--green)':'var(--red)'}">\${neutral?'⚠':up?'↑':'↓'}</span>
+          <span style="font-size:22px;color:${neutral?'var(--gold)':up?'var(--green)':'var(--red)'}">${neutral?'⚠️':(up?'↑':'↓')}</span>
           <span class="pred-verdict ${neutral?'neutral':up?'up':'down'}">${neutral?'NEUTRAL':pred.direction}</span>
           <span class="pred-lock">🔒 LOCKED</span>
           <span class="signal-quality ${sq}">${sqLabel}</span>
@@ -1658,7 +1658,7 @@ function startCountdown(total,dir){
         stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}"/>
       <text x="28" y="28" text-anchor="middle" dominant-baseline="middle"
         font-family="Syne,sans-serif" font-weight="700" font-size="12" fill="#edeaf3"
-        transform="rotate(90,28,28)">${s}</text>
+        >${s}</text>
     </svg><div class="cd-sub">SLOT LEFT</div>`;
   };
   draw();cdTimer=setInterval(()=>{if(s>0){s--;draw();}else clearInterval(cdTimer);},1000);
