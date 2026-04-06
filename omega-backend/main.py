@@ -236,6 +236,22 @@ async def get_polymarket():
                 continue
     raise HTTPException(404, "No se encontró mercado activo")
 
+@app.get("/ptb")
+async def get_ptb(slot: int):
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            slot_iso = datetime.fromtimestamp(slot, tz=timezone.utc).isoformat()
+            url = f"https://polymarket.com/api/past-results?symbol=BTC&variant=fiveminute&assetType=crypto&currentEventStartTime={slot_iso}&count=1"
+            r = await client.get(url)
+            if r.status_code == 200:
+                data = r.json()
+                results = data.get("data", {}).get("results", [])
+                if results:
+                    return {"price": results[-1]["closePrice"]}
+        except Exception as e:
+            raise HTTPException(500, str(e))
+    raise HTTPException(404, "No se encontró PTB")
+
 @app.get("/health")
 async def health():
     return {"ok": True, "ts": int(time.time())}
