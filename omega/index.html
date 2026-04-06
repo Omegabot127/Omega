@@ -1155,43 +1155,14 @@ async function fetchSlotOpenPrice(){
 
 // ─── Polymarket ───
 async function fetchPolyBTC5m(){
-  const curSlot=Math.floor(Date.now()/1000/300)*300;
-  // URL directa del evento activo
-  const eventUrl = `https://polymarket.com/event/btc-updown-5m-${curSlot}`;
-
-  for(const slug of [`btc-updown-5m-${curSlot}`,`btc-updown-5m-${curSlot-300}`,`btc-updown-5m-${curSlot+300}`]){
-    try{
-      // Retry ante 503
-      let data=null;
-      for(let _try=0;_try<3;_try++){
-        data=await safeFetch(`https://gamma-api.polymarket.com/events?slug=${slug}`);
-        if(data) break;
-        if(_try<2) await new Promise(r=>setTimeout(r,1500*(_try+1)));
-      }
-      if(!data) continue;
-      if(!Array.isArray(data))data=data.data||data.events||[];
-      if(!data.length)continue;
-      const event=data[0],market=event.markets?.[0]||event;
-      const prices=JSON.parse(market.outcomePrices||'[0.5,0.5]');
-      // Extraer token IDs para order book
-      let tokenUp = null, tokenDown = null;
-      try {
-        const tokens = market.clobTokenIds ? JSON.parse(market.clobTokenIds) : null;
-        if(tokens && tokens.length >= 2){ tokenUp = tokens[0]; tokenDown = tokens[1]; }
-      } catch(e){}
-      return{
-        question:event.title||market.question||slug,
-        upPct:(parseFloat(prices[0])*100).toFixed(1),
-        downPct:(parseFloat(prices[1])*100).toFixed(1),
-        volume:parseFloat(market.volume||event.volume||0),
-        slug,
-        url:`https://polymarket.com/event/${slug}`,
-        tokenUp, tokenDown
-      };
-    }catch(e){continue;}
+  try {
+    const r = await fetch('https://omega-production-d6f1.up.railway.app/polymarket', {signal: AbortSignal.timeout(8000)});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } catch(e) {
+    console.error('[Polymarket] Error:', e.message);
+    throw e;
   }
-  console.error('[Polymarket] No se encontró mercado BTC 5m activo tras todos los intentos');
-  throw new Error('No se encontró mercado BTC 5m activo');
 }
 
 // ─── Order Book & Trades ───
