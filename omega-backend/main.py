@@ -208,6 +208,34 @@ async def get_status():
 async def get_history(limit: int = 50):
     return {"trades": trade_log[-limit:][::-1], "total": len(trade_log)}
 
+@app.get("/polymarket")
+async def get_polymarket():
+    cur_slot = (int(time.time()) // 300) * 300
+    async with httpx.AsyncClient(timeout=10) as client:
+        for s in [f"btc-updown-5m-{cur_slot}", f"btc-updown-5m-{cur_slot-300}", f"btc-updown-5m-{cur_slot+300}"]:
+            try:
+                r = await client.get(f"{GAMMA_BASE}/events?slug={s}")
+                if r.status_code != 200: continue
+                events = r.json()
+                if not events: continue
+                event = events[0]
+                market = event.get("markets", [{}])[0]
+                prices = json.loads(market.get("outcomePrices", "[0.5,0.5]"))
+                tokens = json.loads(market.get("clobTokenIds", "[]"))
+                return {
+                    "question": event.get("title", s),
+                    "upPct": round(float(prices[0]) * 100, 1),
+                    "downPct": round(float(prices[1]) * 100, 1),
+                    "volume": float(market.get("volume", 0)),
+                    "slug": s,
+                    "url": f"https://polymarket.com/event/{s}",
+                    "tokenUp": tokens[0] if len(tokens) > 0 else None,
+                    "tokenDown": tokens[1] if len(tokens) > 1 else None,
+                }
+            except Exception:
+                continue
+    raise HTTPException(404, "No se encontró mercado activo")
+
 @app.get("/health")
 async def health():
     return {"ok": True, "ts": int(time.time())}
