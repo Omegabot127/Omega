@@ -1100,22 +1100,18 @@ async function fetchSlotOpenPrice(){
 
   // PASO 3: API de Polymarket past-results — closePrice del slot anterior = openPrice del slot actual
   try {
-    const slotISO = new Date(curSlot * 1000).toISOString();
-    const url = `https://polymarket.com/api/past-results?symbol=BTC&variant=fiveminute&assetType=crypto&currentEventStartTime=${slotISO}&count=1`;
+    const url = `https://omega-production-d6f1.up.railway.app/ptb?slot=${curSlot}`;
     const d = await safeFetch(url);
-    if(d?.data?.results?.length > 0){
-      const lastResult = d.data.results[d.data.results.length - 1];
-      const openPrice = lastResult.closePrice;
-      if(openPrice > 0){
-        console.log('[PTB] ✅ Polymarket past-results:', openPrice);
-        // Guardar en caché
-        try {
-          const slotCache = JSON.parse(localStorage.getItem('omega_slot_prices')||'{}');
-          slotCache[curSlot] = openPrice;
-          localStorage.setItem('omega_slot_prices', JSON.stringify(slotCache));
-        } catch(e) {}
-        return { price: openPrice, source: 'Chainlink (Polymarket) ✓' };
-      }
+    const openPrice = d?.price;
+    if(openPrice > 0){
+      console.log('[PTB] ✅ Polymarket past-results:', openPrice);
+      // Guardar en caché
+      try {
+        const slotCache = JSON.parse(localStorage.getItem('omega_slot_prices')||'{}');
+        slotCache[curSlot] = openPrice;
+        localStorage.setItem('omega_slot_prices', JSON.stringify(slotCache));
+      } catch(e) {}
+      return { price: openPrice, source: 'Chainlink (Polymarket) ✓' };
     }
   } catch(e) { console.warn('[PTB] Polymarket API error:', e.message); }
 
