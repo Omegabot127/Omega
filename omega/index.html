@@ -1979,7 +1979,32 @@ async function runFull(){
     $('predWrap').innerHTML=`<div class="err">⚠ Error IA: ${e.message}</div>`;
   }
 
-  btn.disabled=false;btn.innerHTML='⟳ &nbsp;ACTUALIZAR PREDICCIÓN';
+  // Auto-trade
+  if(pred && pred.direction !== 'NEUTRAL' && pred.confidence >= 65){
+    fetch('https://omega-production-d6f1.up.railway.app/trade', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        direction: pred.direction,
+        confidence: pred.confidence,
+        signal_quality: pred.signalQuality,
+        token_up: polyData?.tokenUp || null,
+        token_down: polyData?.tokenDown || null,
+        bankroll: parseFloat(document.getElementById('brInput')?.value || '50'),
+        hour: new Date().getHours()
+      })
+    })
+    .then(r => r.json())
+    .then(result => {
+      if(result.executed){
+        console.log('✅ Trade ejecutado:', result.trade);
+      } else {
+        console.log('⏭️ Trade omitido:', result.reason);
+      }
+    })
+    .catch(e => console.error('Trade error:', e));
+  }
+  '⟳ &nbsp;ACTUALIZAR PREDICCIÓN';
 }
 
 // Fallback: si RTDS no actualiza en 15s, usar Binance
