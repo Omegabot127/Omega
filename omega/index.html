@@ -658,7 +658,7 @@ function renderAdvancedStats(){
   const byDir = {UP:{w:0,l:0}, DOWN:{w:0,l:0}};
   hist.forEach(h => {
     const d = h.direction || 'UP';
-    h.result==='WIN' ? byDir[d].w++ : byDir[d].l++;
+   if(byDir[d]) { h.result==='WIN' ? byDir[d].w++ : byDir[d].l++; }
   });
   const dirHtml = ['UP','DOWN'].map(d => {
     const s = byDir[d]; const total = s.w+s.l;
