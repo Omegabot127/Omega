@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -6,13 +7,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>OMEGA v5.2 — BTC Predictor</title>
+<title>OMEGA v5.3 — BTC Predictor</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#1a1b1e;--s1:#141416;--s2:#1f2023;--s3:#25262a;
   --border:rgba(255,255,255,0.08);--b2:rgba(255,255,255,0.04);
-  --gold:#f0b90b;--green:#26a69a;--red:#ef5350;--blue:#4c9fff;h
+  --gold:#f0b90b;--green:#26a69a;--red:#ef5350;--blue:#4c9fff;
   --text:#e2e8f0;--muted:#4a6080;--dim:#2a2d35;
 }
 *{margin:0;padding:0;box-sizing:border-box}
@@ -658,7 +659,7 @@ function renderAdvancedStats(){
   const byDir = {UP:{w:0,l:0}, DOWN:{w:0,l:0}};
   hist.forEach(h => {
     const d = h.direction || 'UP';
-   if(byDir[d]) { h.result==='WIN' ? byDir[d].w++ : byDir[d].l++; }
+    if(byDir[d]) { h.result==='WIN' ? byDir[d].w++ : byDir[d].l++; }
   });
   const dirHtml = ['UP','DOWN'].map(d => {
     const s = byDir[d]; const total = s.w+s.l;
@@ -1100,18 +1101,22 @@ async function fetchSlotOpenPrice(){
 
   // PASO 3: API de Polymarket past-results — closePrice del slot anterior = openPrice del slot actual
   try {
-    const url = `https://omega-production-d6f1.up.railway.app/ptb?slot=${curSlot}`;
+    const slotISO = new Date(curSlot * 1000).toISOString();
+    const url = `https://polymarket.com/api/past-results?symbol=BTC&variant=fiveminute&assetType=crypto&currentEventStartTime=${slotISO}&count=1`;
     const d = await safeFetch(url);
-    const openPrice = d?.price;
-    if(openPrice > 0){
-      console.log('[PTB] ✅ Polymarket past-results:', openPrice);
-      // Guardar en caché
-      try {
-        const slotCache = JSON.parse(localStorage.getItem('omega_slot_prices')||'{}');
-        slotCache[curSlot] = openPrice;
-        localStorage.setItem('omega_slot_prices', JSON.stringify(slotCache));
-      } catch(e) {}
-      return { price: openPrice, source: 'Chainlink (Polymarket) ✓' };
+    if(d?.data?.results?.length > 0){
+      const lastResult = d.data.results[d.data.results.length - 1];
+      const openPrice = lastResult.closePrice;
+      if(openPrice > 0){
+        console.log('[PTB] ✅ Polymarket past-results:', openPrice);
+        // Guardar en caché
+        try {
+          const slotCache = JSON.parse(localStorage.getItem('omega_slot_prices')||'{}');
+          slotCache[curSlot] = openPrice;
+          localStorage.setItem('omega_slot_prices', JSON.stringify(slotCache));
+        } catch(e) {}
+        return { price: openPrice, source: 'Chainlink (Polymarket) ✓' };
+      }
     }
   } catch(e) { console.warn('[PTB] Polymarket API error:', e.message); }
 
@@ -1508,23 +1513,64 @@ async function askClaude(btcPrice,change24h,polyData,fg,orderBook){
                         polyVol > 10000 ? 'MEDIO ($'+Math.round(polyVol/1000)+'K)' :
                         'BAJO ($'+Math.round(polyVol/1000)+'K) — odds poco confiables';
 
-  // ── Score compuesto ──
+  // ── Pesos dinámicos — aprenden de los últimos 20 slots ──────────────────────
+  function getDynamicWeights(){
+    try {
+      const hist = loadHist().filter(h => h.result && h.result !== 'PENDING' && h.priceAtClose && h.ptb);
+      const last20 = hist.slice(0, 20);
+      if(last20.length < 5) return { intra:5, mom:3, macroPrice:5, ob:2, candle:2, gap:2, streak:0, recentWR:50 };
+
+      // Win rate reciente
+      const wins = last20.filter(h => h.result === 'WIN').length;
+      const recentWR = Math.round(wins / last20.length * 100);
+
+      // Detectar bias de dirección — si lleva 4+ slots en la misma dirección, penalizar
+      let streakDir = last20[0].direction, streakCount = 1;
+      for(let i = 1; i < Math.min(6, last20.length); i++){
+        if(last20[i].direction === streakDir) streakCount++;
+        else break;
+      }
+      const streakPenalty = streakCount >= 4 ? -3 : streakCount >= 3 ? -1.5 : 0;
+
+      // Calcular qué tan bien predijo cada señal en los últimos 20 slots
+      // Order book: ¿cuándo el OB era bullish, ganó?
+      // Simplificado: si WR reciente < 45%, reducir pesos de momentum y aumentar contrarian
+      const momWeight   = recentWR < 45 ? 1.0 : recentWR > 60 ? 4.0 : 3.0;
+      const intraWeight = recentWR < 45 ? 2.0 : recentWR > 60 ? 6.0 : 5.0;
+      const macroWeight = recentWR < 45 ? 3.0 : recentWR > 60 ? 6.0 : 5.0;
+      const obWeight    = recentWR < 45 ? 3.0 : 2.0; // order book más importante cuando momentum falla
+      const candleW     = recentWR < 45 ? 1.0 : 2.0;
+
+      // Detectar si el mercado está revirtiendo (últimas 3 velas contradicen tendencia)
+      const last3dirs = last20.slice(0,3).map(h => h.priceAtClose >= h.ptb ? 1 : -1);
+      const last3sum = last3dirs.reduce((a,b)=>a+b,0);
+      const reversing = Math.abs(last3sum) <= 1; // mercado lateral/reversión
+
+      return { intra: intraWeight, mom: momWeight, macroPrice: macroWeight, ob: obWeight, candle: candleW,
+               gap: 2, streak: streakPenalty, recentWR, streakCount, streakDir, reversing };
+    } catch(e) {
+      return { intra:5, mom:3, macroPrice:5, ob:2, candle:2, gap:2, streak:0, recentWR:50 };
+    }
+  }
+  const dw = getDynamicWeights();
+
+  // ── Score compuesto con pesos dinámicos ───────────────────────────────────
   let bullPts = 0, bearPts = 0;
 
-  // 1. Momentum intra-slot (peso 5, reducido si hay tendencia macro contraria)
+  // 1. Momentum intra-slot (peso dinámico)
   const intraSignal = parseFloat(intra.signal)||0;
   const intraBearPenalty = (macroPriceTrend.trend <= -2) ? 0.5 : 1.0;
   const intraBullPenalty = (macroPriceTrend.trend >= 2) ? 0.5 : 1.0;
-  if(intraSignal > 0) bullPts += Math.min(5, intraSignal/10) * intraBearPenalty;
-  else if(intraSignal < 0) bearPts += Math.min(5, Math.abs(intraSignal)/10) * intraBullPenalty;
+  if(intraSignal > 0) bullPts += Math.min(dw.intra, intraSignal/10) * intraBearPenalty;
+  else if(intraSignal < 0) bearPts += Math.min(dw.intra, Math.abs(intraSignal)/10) * intraBullPenalty;
 
-  // 2. Momentum slots recientes (peso 3)
-  if(mom.trend > 0) bullPts += Math.min(3, mom.trend * 1.2);
-  else if(mom.trend < 0) bearPts += Math.min(3, Math.abs(mom.trend) * 1.2);
+  // 2. Momentum slots recientes (peso dinámico)
+  if(mom.trend > 0) bullPts += Math.min(dw.mom, mom.trend * 1.2);
+  else if(mom.trend < 0) bearPts += Math.min(dw.mom, Math.abs(mom.trend) * 1.2);
 
   // 3. Gap actual vs PTB ajustado por tiempo (peso 2)
   const timeWeight = secsLeft > 180 ? 0.5 : secsLeft > 120 ? 1 : secsLeft > 60 ? 2 : 3.5;
-  const gapScore = Math.min(2, Math.abs(pct) * 20 * (timeWeight/4));
+  const gapScore = Math.min(dw.gap, Math.abs(pct) * 20 * (timeWeight/4));
   if(diff > 0) bullPts += gapScore; else bearPts += gapScore;
 
   // 4. Promedio gap reciente (peso 1.5)
@@ -1546,27 +1592,40 @@ async function askClaude(btcPrice,change24h,polyData,fg,orderBook){
   // 7. Fear & Greed (peso 0.5)
   if(fearIdx < 30) bullPts += 0.5; else if(fearIdx > 70) bearPts += 0.5;
 
-  // 8. Tendencia macro de precio (peso 5) — aumentado de 4→5
-  if(macroPriceTrend.trend > 0) bullPts += Math.min(5, macroPriceTrend.trend * 1.5);
-  else if(macroPriceTrend.trend < 0) bearPts += Math.min(5, Math.abs(macroPriceTrend.trend) * 1.5);
+  // 8. Tendencia macro de precio (peso dinámico)
+  if(macroPriceTrend.trend > 0) bullPts += Math.min(dw.macroPrice, macroPriceTrend.trend * 1.5);
+  else if(macroPriceTrend.trend < 0) bearPts += Math.min(dw.macroPrice, Math.abs(macroPriceTrend.trend) * 1.5);
 
-  // 9. Order book presión (peso 2) — dinero real entrando
-  if(obSignal > 0) bullPts += Math.min(2, obSignal * 0.7);
-  else if(obSignal < 0) bearPts += Math.min(2, Math.abs(obSignal) * 0.7);
+  // 9. Order book presión (peso dinámico — más importante cuando momentum falla)
+  if(obSignal > 0) bullPts += Math.min(dw.ob, obSignal * 0.7);
+  else if(obSignal < 0) bearPts += Math.min(dw.ob, Math.abs(obSignal) * 0.7);
 
-  // 10. Momentum de velas (peso 2) — 3 velas consecutivas = señal fuerte
-  if(candle.signal > 0) bullPts += Math.min(2, candle.signal * 0.7);
-  else if(candle.signal < 0) bearPts += Math.min(2, Math.abs(candle.signal) * 0.7);
+  // 10. Momentum de velas (peso dinámico)
+  if(candle.signal > 0) bullPts += Math.min(dw.candle, candle.signal * 0.7);
+  else if(candle.signal < 0) bearPts += Math.min(dw.candle, Math.abs(candle.signal) * 0.7);
 
-  // 9. Hora del día desde memoria (peso 1.5)
+  // 11. Hora del día desde memoria (peso 1.5)
   if(hourBias.bias > 0.2) bullPts += hourBias.bias * 1.5;
   else if(hourBias.bias < -0.2) bearPts += Math.abs(hourBias.bias) * 1.5;
 
-  // 10. Volatilidad + mercado lateral — penalizar confianza
+  // 12. Penalización por streak — si lleva 4+ slots en la misma dirección, penalizar esa dirección
+  if(dw.streak < 0){
+    if(dw.streakDir === 'UP') bullPts += dw.streak; // resta puntos bull
+    else bearPts += dw.streak; // resta puntos bear
+    bullPts = Math.max(0, bullPts);
+    bearPts = Math.max(0, bearPts);
+  }
+
+  // 13. Mercado en reversión — reducir confianza en señales de momentum
+  if(dw.reversing){
+    bullPts *= 0.85;
+    bearPts *= 0.85;
+  }
+
+  // Volatilidad + mercado lateral — penalizar confianza
   const volPenalty = vol.volatile ? 0.85 : 1.0;
   const lateralPenalty = lateral.lateral ? 0.85 : 1.0;
-  // Volumen bajo en Polymarket = odds poco confiables = bajar confianza
-  const volumePenalty = polyVol < 3000 ? 0.75 : polyVol < 8000 ? 0.90 : 1.0; // lateral = menos predecible
+  const volumePenalty = polyVol < 3000 ? 0.75 : polyVol < 8000 ? 0.90 : 1.0;
 
   const totalPts = bullPts + bearPts || 1;
   const bullPct = (bullPts / totalPts * 100);
@@ -1702,7 +1761,7 @@ REGLAS:
 Responde SOLO con JSON sin markdown:
 {"direction":"${neutralZone ? 'NEUTRAL' : direction}","confidence":${confidence},"signalQuality":"${signalQuality}","neutralZone":${neutralZone},"hourBadge":"${hourBadgeLabel}","hourColor":"${hourBadgeColor}","ptbPrice":${Math.round(ptb)},"gap":${diff.toFixed(2)},"bullScore":${bullPts.toFixed(1)},"bearScore":${bearPts.toFixed(1)},"lstmDir":"${direction}","lstmPct":${bullPct.toFixed(1)},"techDir":"${direction}","techPct":${bullPct.toFixed(1)},"hybridDir":"${direction}","hybridPct":${bullPct.toFixed(1)},"pattern":null,"signals":[{"name":"Momentum slots","value":"${mom.upCount}↑ ${mom.downCount}↓","score":${Math.min(5,Math.abs(mom.trend)*1.5).toFixed(2)},"bullish":${mom.trend>=0}},{"name":"Gap vs PTB","value":"${diff>=0?'+':''}${diff.toFixed(0)}","score":${gapScore.toFixed(2)},"bullish":${diff>=0}},{"name":"Gap promedio","value":"${avgGapNum>=0?'+':''}${avgGapNum}","score":${Math.min(5,Math.abs(avgGapNum)/20).toFixed(2)},"bullish":${avgGapNum>=0}},{"name":"Polymarket","value":"UP ${upPct}%","score":${(polyEdge*2).toFixed(2)},"bullish":${upPct>=50}},{"name":"Fear & Greed","value":"${fearIdx}/100","score":${(Math.abs(fearIdx-50)/20).toFixed(2)},"bullish":${fearIdx<50}}],"sentiment":"${fearIdx<35?'Fear':fearIdx>65?'Greed':'Neutral'}","fundingRate":"0.0000%","exchangeFlow":"NEUTRAL","whaleActivity":"LOW","analysis":"2 oraciones en español: explica la predicción ${neutralZone?'NEUTRAL (no apostar)':direction} basándote principalmente en el momentum (${mom.desc}) y el gap actual de ${diff.toFixed(0)} con ${secsLeft}s restantes."}`;
 
-  const res=await fetch('https://omega-production-d6f1.up.railway.app/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt}),signal:AbortSignal.timeout(15000)});
+  const res=await fetch('https://omegabtc.site/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt}),signal:AbortSignal.timeout(15000)});
   if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error||`Error ${res.status}`);}
   const data=await res.json();
   if(data.error)throw new Error(data.error);
@@ -1963,12 +2022,14 @@ async function runFull(){
       })
       .catch(e => console.error('Trade error:', e));
     }
+    setDS(4,true,'IA (Claude) — ✓');
   }catch(e){
     console.error('[askClaude] Error IA:', e.message);
     setDS(4,false,`IA — ${e.message}`);
     $('predWrap').innerHTML=`<div class="err">⚠ Error IA: ${e.message}</div>`;
   }
-  '⟳ &nbsp;ACTUALIZAR PREDICCIÓN';
+
+  btn.disabled=false;btn.innerHTML='⟳ &nbsp;ACTUALIZAR PREDICCIÓN';
 }
 
 // Fallback: si RTDS no actualiza en 15s, usar Binance
