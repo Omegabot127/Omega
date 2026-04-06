@@ -1,0 +1,2356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>OMEGA v5.3 — BTC Predictor</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#1a1b1e;--s1:#141416;--s2:#1f2023;--s3:#25262a;
+  --border:rgba(255,255,255,0.08);--b2:rgba(255,255,255,0.04);
+  --gold:#f0b90b;--green:#26a69a;--red:#ef5350;--blue:#4c9fff;
+  --text:#e2e8f0;--muted:#4a6080;--dim:#2a2d35;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:13px;min-height:100vh}
+.wrap{max-width:1400px;margin:0 auto;padding:0 0 60px;position:relative}
+
+/* ── TOPBAR ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);background:#111113}
+.logo-row{display:flex;align-items:center;gap:10px}
+.logo-icon{font-size:26px;color:#e94040;font-family:serif;line-height:1}
+.logo-name{font-size:15px;font-weight:700;color:#fff;letter-spacing:.08em}
+.logo-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.ver{background:var(--s2);border:1px solid var(--border);border-radius:20px;padding:3px 12px;font-size:10px;color:var(--muted)}
+
+/* ── NOTICES ── */
+.notice{display:flex;align-items:center;gap:8px;padding:8px 20px;font-size:11px}
+.notice.gray{background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);color:var(--muted)}
+.notice.blue{background:rgba(76,159,255,0.05);border-bottom:1px solid rgba(76,159,255,0.15);color:#6ba3d6}
+.nd{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.nd.gray{background:var(--muted)}
+.nd.blue{background:var(--blue);animation:pulse 1.5s infinite}
+
+/* ── SECTION LABEL ── */
+.sl{font-size:10px;letter-spacing:.15em;color:var(--muted);font-weight:600;text-transform:uppercase;padding:14px 20px 8px}
+
+/* ── STATUS PANEL ── */
+.status-panel{background:var(--s2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:10px 20px}
+.status-row{display:flex;align-items:center;gap:8px;font-size:11px;padding:3px 0;color:var(--muted)}
+.sdot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.sdot.ok{background:var(--green)}.sdot.err{background:var(--red)}.sdot.spin{background:var(--gold);animation:pulse .8s infinite}
+
+/* ── SLOT TIMER ── */
+.slot-wrap{padding:10px 20px;border-bottom:1px solid var(--border)}
+.slot-top{display:flex;justify-content:space-between;margin-bottom:6px;font-size:11px}
+.slot-lbl{color:var(--muted)}.slot-val{color:var(--text);font-weight:600}
+.slot-bg{height:2px;background:var(--dim);border-radius:2px;overflow:hidden}
+.slot-fill{height:100%;background:linear-gradient(90deg,#1a56db,var(--gold));border-radius:2px;transition:width .9s linear}
+.ens-bar{padding:8px 20px;font-size:11px;color:#6ba3d6;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border);background:rgba(76,159,255,0.03)}
+.ens-dot{width:5px;height:5px;border-radius:50%;background:var(--blue);animation:pulse 1.5s infinite;flex-shrink:0}
+
+/* ── PRICE GRID ── */
+.price-grid{display:grid;grid-template-columns:260px 260px 1fr;border-bottom:1px solid var(--border);min-height:160px}
+.pc{padding:20px 24px;position:relative}
+.pc:not(:last-child){border-right:1px solid var(--border)}
+.pc-lbl{font-size:10px;letter-spacing:.15em;color:var(--muted);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px;font-weight:600}
+.pc-val{font-size:38px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.pc-val.gold{color:var(--gold)}
+.pc-val.white{color:#fff}
+.pc-sub{font-size:11px;color:var(--muted);margin-top:8px;font-weight:500}
+
+/* Chart panel */
+.chart-panel{display:flex;flex-direction:column;padding:14px 20px;gap:10px}
+.chart-panel-btns{display:flex;gap:6px;justify-content:flex-end;flex-shrink:0}
+.chart-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:4px 14px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;letter-spacing:.05em}
+.chart-btn:hover{border-color:var(--gold);color:var(--gold)}
+.chart-btn.active{background:rgba(240,185,11,0.12);border-color:var(--gold);color:var(--gold)}
+.chart-canvas-wrap{flex:1;position:relative;overflow:hidden;border-radius:8px;min-height:220px;background:var(--s1)}
+#miniChart{position:absolute;inset:0;width:100%!important;height:100%!important}
+
+/* ── DIFF ── */
+.diff-card{padding:10px 24px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;display:flex;align-items:center;gap:12px}
+.diff-val.pos{color:var(--green)}.diff-val.neg{color:var(--red)}.diff-val.wait{color:var(--muted)}
+.diff-lbl{font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;font-weight:600}
+
+/* ── PREDICTION ── */
+.pred{padding:16px 20px;border-bottom:1px solid var(--border)}
+.pred.up{border-left:3px solid var(--green)}
+.pred.neutral{border-left:3px solid var(--gold);background:rgba(240,185,11,0.04)}
+.pred-verdict.neutral{color:var(--gold)}
+.signal-quality{display:inline-block;padding:2px 10px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.08em;margin-left:8px}
+.signal-quality.fuerte{background:rgba(38,166,154,0.15);color:var(--green);border:1px solid rgba(38,166,154,0.3)}
+.signal-quality.moderada{background:rgba(76,159,255,0.12);color:var(--blue);border:1px solid rgba(76,159,255,0.25)}
+.signal-quality.debil{background:rgba(239,83,80,0.1);color:var(--red);border:1px solid rgba(239,83,80,0.2)}
+.signal-quality.neutral{background:rgba(240,185,11,0.12);color:var(--gold);border:1px solid rgba(240,185,11,0.3)}
+.no-bet-banner{background:rgba(240,185,11,0.08);border:1px solid rgba(240,185,11,0.25);border-radius:6px;padding:8px 14px;margin:8px 0;font-size:11px;color:var(--gold);display:flex;align-items:center;gap:8px}.pred.down{border-left:3px solid var(--red)}
+.pred-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.pred-verdict{font-size:36px;font-weight:800;letter-spacing:.04em}
+.pred-verdict.up{color:var(--green)}.pred-verdict.down{color:var(--red)}
+.pred-lock{font-size:10px;color:var(--muted);background:var(--s3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;margin-left:8px;font-weight:600}
+.pred-desc{font-size:12px;color:var(--muted);margin-top:4px;font-weight:500}
+.chips{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.chip{background:var(--s3);border:1px solid var(--border);border-radius:4px;padding:4px 12px;font-size:12px;font-weight:700}
+.chip-lbl{font-size:9px;color:var(--muted);margin-right:4px;font-weight:500}
+.model-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.mc{background:var(--s3);border:1px solid var(--border);border-radius:6px;padding:10px}
+.mc-name{font-size:9px;letter-spacing:.1em;color:var(--muted);margin-bottom:4px;text-transform:uppercase}
+.mc-dir{font-size:14px;font-weight:700}
+.mc-dir.up{color:var(--green)}.mc-dir.down{color:var(--red)}
+.mc-pct{font-size:11px;color:var(--muted);margin-top:2px}
+.sig-table{width:100%;border-collapse:collapse}
+.sig-table tr{border-bottom:1px solid var(--b2)}
+.sig-table tr:last-child{border-bottom:none}
+.sig-table td{padding:7px 4px;font-size:12px;vertical-align:middle}
+.sig-name{color:var(--muted);width:130px;font-weight:500}
+.sig-val{color:var(--text);white-space:nowrap;min-width:90px;font-weight:700}
+.sig-bar-wrap{padding:0 10px}
+.sig-bg{height:2px;background:var(--dim);border-radius:2px;overflow:hidden}
+.sig-fill{height:100%;border-radius:2px;transition:width 1.2s ease}
+.sig-score{color:var(--muted);font-size:10px;text-align:right;width:32px}
+.cd-wrap{display:flex;flex-direction:column;align-items:center;gap:3px}
+.cd-sub{font-size:9px;color:var(--muted);letter-spacing:.1em}
+.ai-text{font-size:12px;line-height:1.75;color:rgba(226,232,240,.8);font-weight:500}
+
+/* ── POLYMARKET ── */
+.poly-item{margin:0 20px 8px;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+.pi-q{font-size:12px;color:var(--text);font-weight:600;margin-bottom:6px}
+.pi-ptb{font-size:13px;color:var(--gold);font-weight:700;margin-bottom:8px}
+.pi-foot{display:flex;align-items:center;gap:8px}
+.pi-yes{font-size:11px;color:var(--green);font-weight:700;min-width:60px}
+.pi-no{font-size:11px;color:var(--red);font-weight:700;min-width:60px;text-align:right}
+.pi-bar{flex:1;height:5px;background:var(--dim);border-radius:3px;overflow:hidden;display:flex}
+.pi-y{height:100%;background:var(--green)}.pi-n{height:100%;background:var(--red)}
+.pi-vol{font-size:9px;color:var(--muted);margin-top:5px}
+.poly-src{font-size:9px;color:var(--muted);text-align:right;padding:4px 20px 12px}
+.poly-src a{color:var(--gold);text-decoration:none}
+
+/* ── HISTORIAL ── */
+.hist-filter{display:flex;align-items:center;gap:6px;padding:10px 20px 4px;flex-wrap:wrap}
+.hist-filter-lbl{font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-right:4px}
+.flt-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:20px;padding:3px 12px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.flt-btn:hover{border-color:var(--gold);color:var(--gold)}
+.flt-btn.active{background:rgba(240,185,11,0.12);border-color:var(--gold);color:var(--gold)}
+.hist-day-stats{display:flex;gap:16px;padding:6px 20px 8px;font-size:11px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.hds-item{display:flex;align-items:center;gap:5px;color:var(--muted)}
+.hds-val{font-weight:700;font-size:13px}
+.hds-val.g{color:var(--green)}.hds-val.r{color:var(--red)}.hds-val.a{color:var(--gold)}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:0}
+@media(max-width:520px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+.stat-card{background:var(--bg);padding:14px 20px;text-align:center}
+.stat-val{font-size:28px;font-weight:800;margin-bottom:2px}
+.stat-val.g{color:var(--green)}.stat-val.r{color:var(--red)}.stat-val.a{color:var(--gold)}.stat-val.w{color:var(--text)}
+.stat-lbl{font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.stat-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.hist-wrap{border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:hidden}
+.hist-hdr{display:grid;grid-template-columns:62px 68px 46px 90px 90px 76px 58px;padding:8px 20px;border-bottom:1px solid var(--border);background:var(--s2)}
+.hist-hdr span{font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.hist-row{display:grid;grid-template-columns:62px 68px 46px 90px 90px 76px 58px;padding:8px 20px;border-bottom:1px solid var(--b2);align-items:center}
+.hist-row:last-child{border-bottom:none}
+.hist-row:hover{background:rgba(255,255,255,0.02)}
+.hist-empty{padding:28px 20px;text-align:center;color:var(--muted);font-size:11px;line-height:1.7}
+.badge{display:inline-block;border-radius:3px;padding:2px 7px;font-size:10px;font-weight:700}
+.badge.win{background:rgba(38,166,154,.12);color:var(--green);border:1px solid rgba(38,166,154,.2)}
+.badge.loss{background:rgba(239,83,80,.12);color:var(--red);border:1px solid rgba(239,83,80,.2)}
+.badge.pend{background:rgba(240,185,11,.12);color:var(--gold);border:1px solid rgba(240,185,11,.2)}
+.dir-u{color:var(--green);font-weight:800;font-size:12px}
+.dir-d{color:var(--red);font-weight:800;font-size:12px}
+.h-slot{font-size:11px;color:var(--muted);font-weight:600}
+.h-price{font-size:12px;color:var(--text);font-weight:600}
+.h-conf{font-size:10px;color:var(--muted)}
+.h-gap.p{color:var(--green);font-size:10px}
+.h-gap.n{color:var(--red);font-size:10px}
+.h-gap.m{color:var(--muted);font-size:10px}
+.clear-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:4px 12px;font-size:10px;cursor:pointer;font-family:inherit;transition:all .2s}
+.clear-btn:hover{border-color:var(--red);color:var(--red)}
+
+/* ── SENTIMENT ── */
+.sent-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+@media(max-width:600px){.sent-grid{grid-template-columns:repeat(3,1fr)}}
+.sc{background:var(--bg);padding:12px 8px;text-align:center}
+.sc-lbl{font-size:8px;letter-spacing:.1em;color:var(--muted);margin-bottom:4px;text-transform:uppercase}
+.sc-val{font-size:12px;font-weight:700}
+.sc-val.g{color:var(--green)}.sc-val.r{color:var(--red)}.sc-val.a{color:var(--gold)}.sc-val.m{color:var(--muted)}
+
+/* ── ADVANCED STATS ── */
+.adv-stats{padding:16px 20px;border-bottom:1px solid var(--border)}
+.adv-stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:600px){.adv-stats-grid{grid-template-columns:1fr}}
+.adv-card{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+.adv-card-title{font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.adv-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--b2);font-size:12px}
+.adv-row:last-child{border-bottom:none}
+.adv-row-lbl{color:var(--muted);font-weight:500}
+.adv-row-val{font-weight:700;display:flex;align-items:center;gap:6px}
+.adv-bar-wrap{width:60px;height:3px;background:var(--dim);border-radius:2px;overflow:hidden}
+.adv-bar{height:100%;border-radius:2px;transition:width .6s ease}
+.adv-empty{font-size:11px;color:var(--muted);text-align:center;padding:12px 0}
+
+/* ── BANKROLL MANAGER ── */
+.bankroll-section{padding:16px 20px;border-bottom:1px solid var(--border)}
+.bankroll-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+@media(max-width:600px){.bankroll-grid{grid-template-columns:1fr}}
+.br-card{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+.br-label{font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;font-weight:600;margin-bottom:8px}
+.br-input-wrap{display:flex;align-items:center;gap:8px}
+.br-input{background:var(--s3);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:20px;font-weight:700;width:100%;padding:6px 10px;border-radius:6px;outline:none}
+.br-input:focus{border-color:var(--gold)}
+.br-currency{font-size:16px;font-weight:700;color:var(--muted)}
+.risk-btns{display:flex;gap:6px}
+.risk-btn{flex:1;padding:8px 4px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--muted);font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;text-align:center}
+.risk-btn.active.conservative{border-color:var(--green);color:var(--green);background:rgba(38,166,154,.1)}
+.risk-btn.active.normal{border-color:var(--gold);color:var(--gold);background:rgba(240,185,11,.1)}
+.risk-btn.active.aggressive{border-color:var(--red);color:var(--red);background:rgba(239,83,80,.1)}
+.bet-display{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+.bet-amount{font-size:32px;font-weight:800;color:var(--gold)}
+.bet-info{text-align:right}
+.bet-info-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+.bet-info-sub{font-size:11px;color:var(--muted)}
+.bet-warning{font-size:11px;color:var(--red);margin-top:8px;padding:8px 12px;background:rgba(239,83,80,.08);border-radius:6px;border-left:3px solid var(--red)}
+
+/* ── MISC ── */
+.ld{display:flex;align-items:center;gap:8px;padding:14px 20px;font-size:11px;color:var(--muted)}
+.dots span{display:inline-block;width:4px;height:4px;background:var(--gold);border-radius:50%;margin:0 2px;animation:bounce 1.2s infinite}
+.dots span:nth-child(2){animation-delay:.2s}.dots span:nth-child(3){animation-delay:.4s}
+@keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-4px);opacity:1}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.err{background:rgba(239,83,80,.08);border-left:3px solid var(--red);padding:12px 20px;font-size:11px;color:var(--red)}
+.warn{background:rgba(240,185,11,.07);border-left:3px solid var(--gold);padding:12px 20px;font-size:11px;color:var(--gold)}
+.spin{animation:spin 1s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hdiv{height:1px;background:var(--border);margin:0}
+.refresh-btn{width:calc(100% - 40px);margin:16px 20px;background:var(--gold);color:#000;border:none;border-radius:6px;padding:12px;font-family:inherit;font-weight:700;font-size:13px;letter-spacing:.08em;cursor:pointer;transition:all .2s}
+.refresh-btn:hover{background:#e0aa00}
+.refresh-btn:disabled{opacity:.5;cursor:not-allowed}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="logo-row">
+      <img src="data:image/jpeg;base64,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" style="width:36px;height:36px;object-fit:contain;" alt="Ω"/>
+      <div><div class="logo-name">OMEGA</div><div class="logo-sub">5-Min Predictor · Polymarket BTC/USD</div></div>
+    </div>
+    <span class="ver">v5.2</span>
+  </div>
+  <div class="notice gray"><div class="nd gray"></div>Las predicciones no son 100% precisas. Úsalas como referencia.</div>
+  <div class="notice blue"><div class="nd blue"></div>Precio Chainlink en tiempo real — mismo feed que usa Polymarket.</div>
+
+  <!-- STATUS -->
+  <div class="sl">Estado de Fuentes</div>
+  <div class="status-panel">
+    <div class="status-row"><div class="sdot spin" id="d1"></div><span id="l1">Polymarket BTC 5m — conectando...</span></div>
+    <div class="status-row"><div class="sdot spin" id="d2"></div><span id="l2">BTC — conectando...</span></div>
+    <div class="status-row"><div class="sdot spin" id="d3"></div><span id="l3">Fear &amp; Greed — conectando...</span></div>
+    <div class="status-row"><div class="sdot spin" id="d4"></div><span id="l4">IA (Claude) — en espera...</span></div>
+  </div>
+
+  <!-- SLOT TIMER -->
+  <div class="slot-wrap">
+    <div class="slot-top"><span class="slot-lbl">5m Next:</span><span class="slot-val" id="slotVal">—</span></div>
+    <div class="slot-bg"><div class="slot-fill" id="slotFill" style="width:0%"></div></div>
+  </div>
+  <div class="ens-bar"><div class="ens-dot"></div>Ensemble: <strong style="margin-left:4px">ACTIVE</strong>&nbsp;· Live mode</div>
+
+  <!-- PRICES -->
+  <div class="price-grid">
+    <div class="pc">
+      <div class="pc-lbl">PRICE TO BEAT <span id="ptbEditBtn" onclick="togglePTBEdit()" style="cursor:pointer;font-size:9px;color:var(--gold);margin-left:6px;opacity:0.7">✏️ edit</span></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="pc-val white" id="ptbVal">—</div>
+        <input id="ptbInput" type="number" step="0.01"
+          style="display:none;background:var(--s2);border:1px solid var(--gold);color:#fff;font-family:inherit;font-size:22px;font-weight:800;width:160px;padding:4px 10px;border-radius:4px;"
+          onkeydown="if(event.key==='Enter')applyPTBEdit()"
+          onblur="applyPTBEdit()"/>
+      </div>
+      <div class="pc-sub" id="ptbSub">Precio apertura del slot</div>
+    </div>
+    <div class="pc">
+      <div class="pc-lbl">CURRENT PRICE</div>
+      <div class="pc-val gold" id="curVal">—</div>
+      <div class="pc-sub" id="curSub">Chainlink live...</div>
+    </div>
+    <!-- Chart panel -->
+    <div class="chart-panel">
+      <div class="chart-panel-btns">
+        <button class="chart-btn active" id="btnLine" onclick="setChartMode('line')">Line</button>
+        <button class="chart-btn" id="btnCandle" onclick="setChartMode('candle')">Candles</button>
+      </div>
+      <div class="chart-canvas-wrap" id="chartContainer"></div>
+    </div>
+  </div>
+  <div class="diff-card"><div class="diff-lbl">Current vs Target</div><div class="diff-val wait" id="diffVal">Esperando datos...</div></div>
+
+  <!-- PREDICTION -->
+  <div class="sl">Prediction</div>
+  <div id="predWrap" class="pred"><div class="ld"><div class="dots"><span></span><span></span><span></span></div>Analizando mercados...</div></div>
+
+  <!-- POLYMARKET -->
+  <div class="sl">Mercado — Bitcoin Up or Down 5 Min</div>
+  <div id="polyWrap"><div class="ld"><div class="dots"><span></span><span></span><span></span></div>Buscando mercado activo...</div></div>
+  <div class="poly-src">Datos de <a href="https://polymarket.com/crypto/5M" target="_blank">polymarket.com/crypto/5M</a></div>
+
+  <!-- HISTORIAL -->
+  <div class="sl">Historial de Predicciones</div>
+  <div class="hist-filter">
+    <span class="hist-filter-lbl">Ver:</span>
+    <button class="flt-btn active" id="fltHoy" onclick="setHistFilter('hoy')">Hoy</button>
+    <button class="flt-btn" id="fltAyer" onclick="setHistFilter('ayer')">Ayer</button>
+    <button class="flt-btn" id="flt7d" onclick="setHistFilter('7d')">7 días</button>
+    <button class="flt-btn" id="fltTodo" onclick="setHistFilter('todo')">Todo</button>
+  </div>
+  <div class="hist-day-stats" id="histDayStats"></div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-val g" id="hWinRate">—</div><div class="stat-lbl">Win Rate</div><div class="stat-sub" id="hRecord">0W / 0L</div></div>
+    <div class="stat-card"><div class="stat-val a" id="hStreak">—</div><div class="stat-lbl">Racha actual</div><div class="stat-sub" id="hStreakDir">—</div></div>
+    <div class="stat-card"><div class="stat-val w" id="hBest">—</div><div class="stat-lbl">Mejor racha WIN</div><div class="stat-sub">consecutivas</div></div>
+    <div class="stat-card"><div class="stat-val w" id="hTotal">0</div><div class="stat-lbl">Total slots</div><div class="stat-sub" id="hPending">0 pendientes</div></div>
+  </div>
+  <div class="hist-wrap">
+    <div class="hist-hdr">
+      <span>Slot</span><span>Dirección</span><span>Conf</span><span>PTB</span><span>Cierre</span><span>Gap final</span><span>Result</span>
+    </div>
+    <div id="histBody"><div class="hist-empty">Aún no hay predicciones.<br>Se guardan automáticamente cada slot. 🔄</div></div>
+  </div>
+  <div style="display:flex;justify-content:flex-end;padding:8px 20px">
+    <button class="clear-btn" onclick="clearHistory()">🗑 Borrar historial</button>
+  </div>
+
+  <!-- ADVANCED STATS -->
+  <div class="sl">Estadísticas Avanzadas</div>
+  <div class="adv-stats">
+    <div class="adv-stats-grid">
+      <div class="adv-card" id="advHourCard">
+        <div class="adv-card-title">WR por hora del día</div>
+        <div id="advHourBody"><div class="adv-empty">Acumulando datos...</div></div>
+      </div>
+      <div class="adv-card" id="advDirCard">
+        <div class="adv-card-title">WR por dirección</div>
+        <div id="advDirBody"><div class="adv-empty">Acumulando datos...</div></div>
+      </div>
+      <div class="adv-card" id="advConfCard">
+        <div class="adv-card-title">WR por confianza</div>
+        <div id="advConfBody"><div class="adv-empty">Acumulando datos...</div></div>
+      </div>
+      <div class="adv-card" id="advGapCard">
+        <div class="adv-card-title">Gap promedio</div>
+        <div id="advGapBody"><div class="adv-empty">Acumulando datos...</div></div>
+      </div>
+      <div class="adv-card" id="advDayCard" style="grid-column:1/-1">
+        <div class="adv-card-title">WR por día de la semana</div>
+        <div id="advDayBody"><div class="adv-empty">Acumulando datos...</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SENTIMENT -->
+  <div class="sl">Market Sentiment</div>
+  <div class="sent-grid">
+    <div class="sc"><div class="sc-lbl">Fear &amp; Greed</div><div class="sc-val m" id="s1">—</div></div>
+    <div class="sc"><div class="sc-lbl">Sentiment</div><div class="sc-val m" id="s2">—</div></div>
+    <div class="sc"><div class="sc-lbl">BTC Dom.</div><div class="sc-val m" id="s3">—</div></div>
+    <div class="sc"><div class="sc-lbl">Funding Rate</div><div class="sc-val m" id="s4">—</div></div>
+    <div class="sc"><div class="sc-lbl">Exchange Flow</div><div class="sc-val m" id="s5">—</div></div>
+    <div class="sc"><div class="sc-lbl">Whale Activity</div><div class="sc-val m" id="s6">—</div></div>
+  </div>
+
+  <!-- BANKROLL MANAGER -->
+  <div class="sl">Bankroll Manager</div>
+  <div class="bankroll-section">
+    <div class="bankroll-grid">
+      <div class="br-card">
+        <div class="br-label">Capital disponible</div>
+        <div class="br-input-wrap">
+          <span class="br-currency">$</span>
+          <input class="br-input" id="brBankroll" type="number" min="10" step="10" value="200" oninput="updateBetDisplay()"/>
+        </div>
+      </div>
+      <div class="br-card">
+        <div class="br-label">Nivel de riesgo</div>
+        <div class="risk-btns">
+          <button class="risk-btn conservative" id="riskConservative" onclick="setRisk('conservative')">
+            🛡 Conservador<br><span style="font-size:9px;font-weight:400">2% por slot</span>
+          </button>
+          <button class="risk-btn normal active" id="riskNormal" onclick="setRisk('normal')">
+            ⚖ Normal<br><span style="font-size:9px;font-weight:400">4% por slot</span>
+          </button>
+          <button class="risk-btn aggressive" id="riskAggressive" onclick="setRisk('aggressive')">
+            🔥 Agresivo<br><span style="font-size:9px;font-weight:400">6% por slot</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="bet-display">
+      <div>
+        <div style="font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Apuesta sugerida ahora</div>
+        <div class="bet-amount" id="brBetAmount">$8.00</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px" id="brBetReason">4% × $200 × 1.0x (hora neutral)</div>
+      </div>
+      <div class="bet-info">
+        <div class="bet-info-lbl">% del bankroll</div>
+        <div style="font-size:20px;font-weight:700;color:var(--text)" id="brBetPct">4.0%</div>
+        <div class="bet-info-sub" id="brHourWR">Esta hora: —</div>
+      </div>
+    </div>
+    <div id="brWarning" style="display:none" class="bet-warning"></div>
+  </div>
+
+  <div class="hdiv"></div>
+  <button class="refresh-btn" id="refreshBtn" onclick="runFull()">⟳ &nbsp;ACTUALIZAR PREDICCIÓN</button>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => n&&!isNaN(n)?'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+const fmtVol = n=>{if(!n||n<1)return'—';if(n>=1e9)return'$'+(n/1e9).toFixed(1)+'B';if(n>=1e6)return'$'+(n/1e6).toFixed(1)+'M';if(n>=1e3)return'$'+(n/1e3).toFixed(0)+'K';return'$'+n;};
+const fmtTime = ()=>{const d=new Date(),h=d.getHours(),m=String(d.getMinutes()).padStart(2,'0'),s=String(d.getSeconds()).padStart(2,'0');return`${h%12||12}:${m}:${s} ${h>=12?'PM':'AM'}`;};
+const fmtSlot = ts=>{const d=new Date(ts*1000),h=d.getHours()%12||12,m=String(d.getMinutes()).padStart(2,'0'),ap=d.getHours()>=12?'PM':'AM';return`${h}:${m} ${ap}`;};
+const ld = (id,msg)=>$(id).innerHTML=`<div class="ld"><div class="dots"><span></span><span></span><span></span></div>${msg}</div>`;
+const setDS = (n,ok,msg)=>{$(`d${n}`).className=`sdot ${ok?'ok':'err'}`;$(`l${n}`).textContent=msg;};
+
+// ─── Estado global ───
+let ptbFixed=null, ptbSlotKey=null, currentBTC=null;
+let polyRetryTimer=null;
+
+function getSlotKey(){return Math.floor(Date.now()/1000/300)*300;}
+function getNextSlotMs(){return getNextSlot().getTime();}
+function togglePTBEdit(){
+  const inp=$('ptbInput'), val=$('ptbVal');
+  if(inp.style.display==='none'){
+    inp.value = ptbFixed ? ptbFixed.toFixed(2) : '';
+    inp.style.display='block';
+    val.style.display='none';
+    inp.focus(); inp.select();
+  } else {
+    applyPTBEdit();
+  }
+}
+function applyPTBEdit(){
+  const inp=$('ptbInput'), val=$('ptbVal');
+  const v=parseFloat(inp.value);
+  if(v>0){
+    ptbFixed=v; ptbSlotKey=getSlotKey();
+    $('ptbVal').textContent=fmt(v);
+    $('ptbSub').textContent='Manual ✏️';
+    updateDiff();
+    console.log('[PTB] Manual:', v);
+  }
+  inp.style.display='none';
+  val.style.display='block';
+}
+
+function setPTB(price,source){
+  // Solo fijar PTB si no hay uno para este slot
+  const curSlot = getSlotKey();
+  if(ptbFixed && ptbSlotKey === curSlot) return; // ya fijado para este slot
+  ptbFixed=price;ptbSlotKey=curSlot;
+  $('ptbVal').textContent=fmt(ptbFixed);
+  $('ptbSub').textContent=source||'Apertura del slot';
+  console.log(`PTB fijado: ${price} (${source}) para slot ${curSlot}`);
+}
+function updateDiff(){
+  if(!ptbFixed||!currentBTC){$('diffVal').textContent='Esperando datos...';$('diffVal').className='diff-val wait';return;}
+  const diff=currentBTC-ptbFixed,pct=(diff/ptbFixed*100),s=diff>=0?'+':'';
+  $('diffVal').textContent=`${s}${fmt(diff)} (${s}${pct.toFixed(3)}%)`;
+  $('diffVal').className=`diff-val ${diff>=0?'pos':'neg'}`;
+}
+
+// ═══════════════════════════════════
+//  HISTORIAL — localStorage
+// ═══════════════════════════════════
+const HIST_KEY='omega_hist_v2';
+
+// ═══════════════════════════════════
+// SISTEMA DE MEMORIA ESTADÍSTICA
+// ═══════════════════════════════════
+const MEMORY_KEY = 'omega_memory_v1';
+
+function loadMemory(){
+  try{ return JSON.parse(localStorage.getItem(MEMORY_KEY)) || {}; }
+  catch{ return {}; }
+}
+
+function saveMemory(m){
+  try{ localStorage.setItem(MEMORY_KEY, JSON.stringify(m)); }
+  catch(e){}
+}
+
+function updateMemory(slot){
+  // Solo procesar slots cerrados con resultado real
+  if(!slot || slot.result === 'PENDING' || !slot.priceAtClose) return;
+  const m = loadMemory();
+  if(!m.patterns) m.patterns = {};
+  if(!m.hourStats) m.hourStats = {};
+  if(!m.dayStats) m.dayStats = {};
+  if(!m.conditionStats) m.conditionStats = {};
+  if(!m.total) m.total = { wins: 0, losses: 0 };
+
+  const won = slot.result === 'WIN';
+  const hour = new Date(slot.slotKey * 1000).getHours();
+  const gap = slot.priceAtClose - slot.ptb;
+  const gapPct = (gap / slot.ptb * 100);
+
+  // Stats por hora del día
+  if(!m.hourStats[hour]) m.hourStats[hour] = { wins: 0, losses: 0 };
+  won ? m.hourStats[hour].wins++ : m.hourStats[hour].losses++;
+
+  // Stats por día de la semana (0=Dom, 1=Lun ... 6=Sab)
+  const day = new Date(slot.slotKey * 1000).getDay();
+  if(!m.dayStats[day]) m.dayStats[day] = { wins: 0, losses: 0 };
+  won ? m.dayStats[day].wins++ : m.dayStats[day].losses++;
+
+  // Stats por dirección predicha
+  const dirKey = slot.direction;
+  if(!m.conditionStats[dirKey]) m.conditionStats[dirKey] = { wins: 0, losses: 0 };
+  won ? m.conditionStats[dirKey].wins++ : m.conditionStats[dirKey].losses++;
+
+  // Stats por rango de confianza
+  const confBucket = slot.confidence >= 80 ? 'high' : slot.confidence >= 65 ? 'mid' : 'low';
+  const confKey = 'conf_' + confBucket;
+  if(!m.conditionStats[confKey]) m.conditionStats[confKey] = { wins: 0, losses: 0 };
+  won ? m.conditionStats[confKey].wins++ : m.conditionStats[confKey].losses++;
+
+  // Total global
+  won ? m.total.wins++ : m.total.losses++;
+  m.lastUpdated = Date.now();
+
+  saveMemory(m);
+}
+
+function getMemoryInsights(){
+  const m = loadMemory();
+  if(!m.total || (m.total.wins + m.total.losses) < 5){
+    return { desc: 'sin suficientes datos históricos aún', hourBias: 0, insights: [] };
+  }
+
+  const insights = [];
+  const hour = new Date().getHours();
+
+  // Insight por hora actual
+  if(m.hourStats && m.hourStats[hour]){
+    const h = m.hourStats[hour];
+    const total = h.wins + h.losses;
+    if(total >= 3){
+      const wr = (h.wins/total*100).toFixed(0);
+      insights.push(`A las ${hour}h: ${wr}% win rate (${total} slots)`);
+    }
+  }
+
+  // Insight por confianza
+  if(m.conditionStats){
+    ['high','mid','low'].forEach(level => {
+      const key = 'conf_' + level;
+      if(m.conditionStats[key]){
+        const c = m.conditionStats[key];
+        const total = c.wins + c.losses;
+        if(total >= 3){
+          const wr = (c.wins/total*100).toFixed(0);
+          const label = level === 'high' ? '≥80%' : level === 'mid' ? '65-79%' : '<65%';
+          insights.push(`Confianza ${label}: ${wr}% WR (${total} slots)`);
+        }
+      }
+    });
+  }
+
+  // Mejor/peor hora
+  let bestHour = null, bestWR = 0;
+  if(m.hourStats){
+    Object.entries(m.hourStats).forEach(([h, stats]) => {
+      const total = stats.wins + stats.losses;
+      if(total >= 3){
+        const wr = stats.wins/total;
+        if(wr > bestWR){ bestWR = wr; bestHour = h; }
+      }
+    });
+  }
+
+  const hourBias = m.hourStats?.[hour] ?
+    (() => { const h = m.hourStats[hour]; const t = h.wins+h.losses;
+      return t >= 3 ? (h.wins/t - 0.5) * 2 : 0; })() : 0;
+
+  return {
+    desc: insights.length > 0 ? insights.join(' | ') : 'acumulando datos...',
+    hourBias,
+    bestHour,
+    bestWR: (bestWR*100).toFixed(0),
+    totalSlots: m.total.wins + m.total.losses,
+    globalWR: ((m.total.wins/(m.total.wins+m.total.losses))*100).toFixed(0),
+    insights
+  };
+}
+
+function loadHist(){
+  try{return JSON.parse(localStorage.getItem(HIST_KEY))||[];}
+  catch{return[];}
+}
+function saveHist(h){
+  try{localStorage.setItem(HIST_KEY,JSON.stringify(h.slice(-500)));}
+  catch(e){}
+}
+
+// Añade una nueva predicción al historial
+function addPrediction(pred, ptb, btcNow, polyData){
+  const h=loadHist();
+  const slotKey=getSlotKey();
+  // Evitar duplicar el mismo slot si ya hay uno PENDING
+  const last=h[h.length-1];
+  if(last && last.slotKey===slotKey && last.result==='PENDING') return;
+  h.push({
+    id: Date.now(),
+    slotKey,
+    slotLabel: fmtSlot(slotKey),
+    direction: pred.direction,
+    confidence: pred.confidence||0,
+    ptb: ptb||0,
+    priceAtPred: btcNow||0,
+    priceAtClose: null,
+    result: 'PENDING',
+    gapFinal: null,
+    polyUp: polyData?.upPct||'—',
+    polyDown: polyData?.downPct||'—',
+  });
+  saveHist(h);
+  renderHistory();
+}
+
+// Cierra el slot PENDING más reciente con el precio de cierre
+function renderAdvancedStats(){
+  const hist = loadHist().filter(h => h.result && h.result !== 'PENDING' && h.priceAtClose);
+  if(hist.length < 3){
+    ['Hour','Dir','Conf','Gap'].forEach(k => {
+      const el = document.getElementById('adv'+k+'Body');
+      if(el) el.innerHTML = '<div class="adv-empty">Necesitas más slots (mín. 3)</div>';
+    });
+    return;
+  }
+
+  const wrColor = wr => wr >= 65 ? 'var(--green)' : wr >= 50 ? 'var(--gold)' : 'var(--red)';
+  const barColor = wr => wr >= 65 ? 'var(--green)' : wr >= 50 ? 'var(--gold)' : 'var(--red)';
+
+  // 1. WR por hora del día
+  const byHour = {};
+  hist.forEach(h => {
+    const hr = new Date(h.slotKey * 1000).getHours();
+    if(!byHour[hr]) byHour[hr] = {w:0,l:0};
+    h.result==='WIN' ? byHour[hr].w++ : byHour[hr].l++;
+  });
+  const hourEntries = Object.entries(byHour)
+    .map(([hr,s]) => ({hr:parseInt(hr), w:s.w, l:s.l, total:s.w+s.l, wr:Math.round(s.w/(s.w+s.l)*100)}))
+    .sort((a,b) => a.hr - b.hr);
+
+  const hourHtml = hourEntries.length ? hourEntries.map(e =>
+    `<div class="adv-row">
+      <span class="adv-row-lbl">${String(e.hr).padStart(2,'0')}:00h <span style="color:var(--muted);font-size:10px">(${e.total})</span></span>
+      <div class="adv-row-val">
+        <span style="color:${wrColor(e.wr)}">${e.wr}%</span>
+        <div class="adv-bar-wrap"><div class="adv-bar" style="width:${e.wr}%;background:${barColor(e.wr)}"></div></div>
+      </div>
+    </div>`
+  ).join('') : '<div class="adv-empty">Sin datos</div>';
+  document.getElementById('advHourBody').innerHTML = hourHtml;
+
+  // 2. WR por dirección UP vs DOWN
+  const byDir = {UP:{w:0,l:0}, DOWN:{w:0,l:0}};
+  hist.forEach(h => {
+    const d = h.direction || 'UP';
+    if(byDir[d]) { h.result==='WIN' ? byDir[d].w++ : byDir[d].l++; }
+  });
+  const dirHtml = ['UP','DOWN'].map(d => {
+    const s = byDir[d]; const total = s.w+s.l;
+    if(total === 0) return '';
+    const wr = Math.round(s.w/total*100);
+    const col = d==='UP' ? 'var(--green)' : 'var(--red)';
+    return `<div class="adv-row">
+      <span class="adv-row-lbl" style="color:${col}">${d==='UP'?'↑':'↓'} ${d}</span>
+      <div class="adv-row-val">
+        <span style="color:${wrColor(wr)}">${wr}%</span>
+        <span style="color:var(--muted);font-size:10px">${s.w}W/${s.l}L</span>
+        <div class="adv-bar-wrap"><div class="adv-bar" style="width:${wr}%;background:${barColor(wr)}"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('advDirBody').innerHTML = dirHtml || '<div class="adv-empty">Sin datos</div>';
+
+  // 3. WR por confianza
+  const byConf = {high:{label:'≥80%',w:0,l:0}, mid:{label:'65–79%',w:0,l:0}, low:{label:'<65%',w:0,l:0}};
+  hist.forEach(h => {
+    const conf = h.confidence || 0;
+    const bucket = conf >= 80 ? 'high' : conf >= 65 ? 'mid' : 'low';
+    h.result==='WIN' ? byConf[bucket].w++ : byConf[bucket].l++;
+  });
+  const confHtml = Object.entries(byConf).map(([k,s]) => {
+    const total = s.w+s.l;
+    if(total === 0) return '';
+    const wr = Math.round(s.w/total*100);
+    return `<div class="adv-row">
+      <span class="adv-row-lbl">${s.label} <span style="color:var(--muted);font-size:10px">(${total})</span></span>
+      <div class="adv-row-val">
+        <span style="color:${wrColor(wr)}">${wr}%</span>
+        <div class="adv-bar-wrap"><div class="adv-bar" style="width:${wr}%;background:${barColor(wr)}"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('advConfBody').innerHTML = confHtml || '<div class="adv-empty">Sin datos</div>';
+
+  // 4. Gap promedio ganador vs perdedor
+  const wins = hist.filter(h => h.result==='WIN');
+  const losses = hist.filter(h => h.result==='LOSS');
+  const avgGap = arr => arr.length ? (arr.reduce((s,h) => s + Math.abs(h.gapFinal||0), 0) / arr.length).toFixed(1) : null;
+  const avgWinGap = avgGap(wins);
+  const avgLossGap = avgGap(losses);
+
+  // Gap por dirección
+  const upWins = hist.filter(h => h.direction==='UP' && h.result==='WIN');
+  const dnWins = hist.filter(h => h.direction==='DOWN' && h.result==='WIN');
+  const avgUpGap = avgGap(upWins);
+  const avgDnGap = avgGap(dnWins);
+
+  const gapHtml = `
+    <div class="adv-row">
+      <span class="adv-row-lbl">Gap promedio WIN</span>
+      <span class="adv-row-val" style="color:var(--green)">${avgWinGap ? '+$'+avgWinGap : '—'}</span>
+    </div>
+    <div class="adv-row">
+      <span class="adv-row-lbl">Gap promedio LOSS</span>
+      <span class="adv-row-val" style="color:var(--red)">${avgLossGap ? '-$'+avgLossGap : '—'}</span>
+    </div>
+    <div class="adv-row">
+      <span class="adv-row-lbl">Gap avg UP wins</span>
+      <span class="adv-row-val" style="color:var(--green)">${avgUpGap ? '$'+avgUpGap : '—'}</span>
+    </div>
+    <div class="adv-row">
+      <span class="adv-row-lbl">Gap avg DOWN wins</span>
+      <span class="adv-row-val" style="color:var(--green)">${avgDnGap ? '$'+avgDnGap : '—'}</span>
+    </div>
+    <div class="adv-row" style="margin-top:4px">
+      <span class="adv-row-lbl" style="color:var(--muted)">Total analizados</span>
+      <span class="adv-row-val" style="color:var(--text)">${hist.length} slots</span>
+    </div>`;
+  document.getElementById('advGapBody').innerHTML = gapHtml;
+
+  // 5. WR por día de la semana
+  const dayNames = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const byDay = {};
+  hist.forEach(h => {
+    const day = new Date(h.slotKey * 1000).getDay();
+    if(!byDay[day]) byDay[day] = {w:0,l:0};
+    h.result==='WIN' ? byDay[day].w++ : byDay[day].l++;
+  });
+
+  const today = new Date().getDay();
+  const dayHtml = Object.entries(byDay).length ?
+    [0,1,2,3,4,5,6].filter(d => byDay[d]).map(d => {
+      const s = byDay[d]; const total = s.w+s.l;
+      const wr = Math.round(s.w/total*100);
+      const isToday = d === today;
+      return `<div class="adv-row" style="${isToday?'background:rgba(240,185,11,0.05);border-radius:4px;':''}">
+        <span class="adv-row-lbl">${isToday?'→ ':''}<strong>${dayNames[d]}</strong> <span style="color:var(--muted);font-size:10px">(${total})</span></span>
+        <div class="adv-row-val">
+          <span style="color:${wrColor(wr)}">${wr}%</span>
+          <div class="adv-bar-wrap"><div class="adv-bar" style="width:${wr}%;background:${barColor(wr)}"></div></div>
+        </div>
+      </div>`;
+    }).join('') :
+    '<div class="adv-empty">Acumulando datos por día...</div>';
+
+  document.getElementById('advDayBody').innerHTML = dayHtml;
+}
+
+function closeLastSlot(closingPrice){
+  const h=loadHist();
+  for(let i=h.length-1;i>=0;i--){
+    if(h[i].result==='PENDING'){
+      const gap=closingPrice-h[i].ptb;
+      const won=(h[i].direction==='UP'&&closingPrice>=h[i].ptb)||(h[i].direction==='DOWN'&&closingPrice<h[i].ptb);
+      h[i].priceAtClose=closingPrice;
+      h[i].gapFinal=gap;
+      h[i].result=won?'WIN':'LOSS';
+      updateMemory(h[i]); // actualizar memoria estadística
+      saveHist(h);
+      renderHistory();
+      renderAdvancedStats();
+      // Flash de resultado
+      showResultFlash(won, h[i].slotLabel);
+      return;
+    }
+  }
+}
+
+// Toast de resultado
+function showResultFlash(won, slot){
+  const el=document.createElement('div');
+  el.style.cssText=`position:fixed;bottom:24px;right:24px;z-index:999;padding:14px 20px;border-radius:10px;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;animation:fadeInUp .3s ease;background:${won?'rgba(0,229,160,.15)':'rgba(255,59,92,.15)'};border:1px solid ${won?'rgba(0,229,160,.4)':'rgba(255,59,92,.4)'};color:${won?'#00e5a0':'#ff3b5c'}`;
+  el.textContent=`${won?'✅ WIN':'❌ LOSS'} — Slot ${slot}`;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),4000);
+}
+
+// Calcula estadísticas y renderiza tabla
+// ── Filtro de historial por fecha ──
+let histFilter = 'hoy'; // hoy | ayer | 7d | todo
+
+function setHistFilter(f){
+  histFilter = f;
+  ['Hoy','Ayer','7d','Todo'].forEach(x => {
+    const el = $('flt'+x.charAt(0).toUpperCase()+x.slice(1));
+    if(el) el.className = 'flt-btn' + (('flt'+x.charAt(0).toUpperCase()+x.slice(1))==='flt'+f.charAt(0).toUpperCase()+f.slice(1) ? ' active' : '');
+  });
+  // Actualizar botones correctamente
+  ['hoy','ayer','7d','todo'].forEach(x => {
+    const id = 'flt' + x.charAt(0).toUpperCase() + x.slice(1);
+    const el = $(id);
+    if(el) el.className = 'flt-btn' + (x === f ? ' active' : '');
+  });
+  renderHistory();
+  renderAdvancedStats();
+}
+
+function filterHistByDate(all){
+  const now = new Date();
+  const todayStr = now.toLocaleDateString('es-CL');
+  const yesterday = new Date(now); yesterday.setDate(yesterday.getDate()-1);
+  const yesterdayStr = yesterday.toLocaleDateString('es-CL');
+  const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(sevenDaysAgo.getDate()-7);
+
+  if(histFilter === 'hoy'){
+    return all.filter(x => {
+      const d = new Date(x.id);
+      return d.toLocaleDateString('es-CL') === todayStr;
+    });
+  }
+  if(histFilter === 'ayer'){
+    return all.filter(x => {
+      const d = new Date(x.id);
+      return d.toLocaleDateString('es-CL') === yesterdayStr;
+    });
+  }
+  if(histFilter === '7d'){
+    return all.filter(x => new Date(x.id) >= sevenDaysAgo);
+  }
+  return all; // todo
+}
+
+function renderHistory(){
+  const all=loadHist().slice().reverse();
+  const completed=all.filter(x=>x.result!=='PENDING');
+  const wins=completed.filter(x=>x.result==='WIN').length;
+  const losses=completed.filter(x=>x.result==='LOSS').length;
+  const pending=all.filter(x=>x.result==='PENDING').length;
+
+  // Aplicar filtro de fecha
+  const filtered = filterHistByDate(all);
+  const filteredCompleted = filtered.filter(x=>x.result!=='PENDING');
+  const filteredWins = filteredCompleted.filter(x=>x.result==='WIN').length;
+  const filteredLosses = filteredCompleted.filter(x=>x.result==='LOSS').length;
+  const filteredPending = filtered.filter(x=>x.result==='PENDING').length;
+
+  // Stats del panel de día filtrado
+  const filteredWR = filteredCompleted.length > 0 ? Math.round(filteredWins/filteredCompleted.length*100) : null;
+  const filteredLabel = histFilter==='hoy'?'Hoy':histFilter==='ayer'?'Ayer':histFilter==='7d'?'7 días':'Total';
+  const dayStatsEl = $('histDayStats');
+  if(dayStatsEl){
+    if(filteredCompleted.length > 0){
+      const upWins = filteredCompleted.filter(x=>x.result==='WIN'&&x.direction==='UP').length;
+      const upTotal = filteredCompleted.filter(x=>x.direction==='UP').length;
+      const dnWins = filteredCompleted.filter(x=>x.result==='WIN'&&x.direction==='DOWN').length;
+      const dnTotal = filteredCompleted.filter(x=>x.direction==='DOWN').length;
+      dayStatsEl.innerHTML = `
+        <div class="hds-item"><span>${filteredLabel}:</span><span class="hds-val ${filteredWR>=60?'g':filteredWR>=45?'a':'r'}">${filteredWR}%</span><span style="color:var(--muted);font-size:10px">(${filteredWins}W/${filteredLosses}L)</span></div>
+        <div class="hds-item">↑ UP: <span class="hds-val ${upTotal>0&&Math.round(upWins/upTotal*100)>=60?'g':'a'}">${upTotal>0?Math.round(upWins/upTotal*100)+'%':'—'}</span><span style="color:var(--muted);font-size:10px">(${upWins}W/${upTotal-upWins}L)</span></div>
+        <div class="hds-item">↓ DOWN: <span class="hds-val ${dnTotal>0&&Math.round(dnWins/dnTotal*100)>=60?'g':'a'}">${dnTotal>0?Math.round(dnWins/dnTotal*100)+'%':'—'}</span><span style="color:var(--muted);font-size:10px">(${dnWins}W/${dnTotal-dnWins}L)</span></div>
+        <div class="hds-item">Slots: <span class="hds-val a">${filteredCompleted.length+filteredPending}</span></div>`;
+    } else {
+      dayStatsEl.innerHTML = `<div class="hds-item" style="color:var(--muted)">Sin datos para ${filteredLabel.toLowerCase()}</div>`;
+    }
+  }
+
+  // Win rate (usa filtered para los contadores del header)
+  const wr=filteredCompleted.length>0?Math.round(filteredWins/filteredCompleted.length*100):null;
+  $('hWinRate').textContent=wr!==null?`${wr}%`:'—';
+  $('hWinRate').className=`stat-val ${wr===null?'w':wr>=60?'g':wr>=45?'a':'r'}`;
+  $('hRecord').textContent=`${filteredWins}W / ${filteredLosses}L`;
+
+  // Racha actual (más reciente primero) — usa datos filtrados
+  let streak=0,streakDir='';
+  for(const x of filtered){
+    if(x.result==='PENDING') continue;
+    if(streak===0){streak=1;streakDir=x.result;}
+    else if(x.result===streakDir) streak++;
+    else break;
+  }
+  $('hStreak').textContent=streak||'—';
+  $('hStreak').className=`stat-val ${streakDir==='WIN'?'g':streakDir==='LOSS'?'r':'a'}`;
+  $('hStreakDir').textContent=streak>0?`${streak}x ${streakDir}`:'Sin datos';
+
+  // Mejor racha de WINS
+  let bestWin=0,curWin=0;
+  for(const x of [...filtered].reverse()){
+    if(x.result==='PENDING') continue;
+    if(x.result==='WIN') curWin++;
+    else curWin=0;
+    if(curWin>bestWin) bestWin=curWin;
+  }
+  $('hBest').textContent=bestWin||'—';
+  $('hTotal').textContent=filtered.length;
+  $('hPending').textContent=`${filteredPending} pendiente${filteredPending!==1?'s':''}`;
+
+  // Tabla
+  if(!all.length){
+    $('histBody').innerHTML='<div class="hist-empty">Aún no hay predicciones guardadas.<br>Se guardan automáticamente al inicio de cada slot. 🔄</div>';
+    return;
+  }
+
+  const tableData = histFilter==='todo' ? all : filtered;
+  $('histBody').innerHTML=tableData.slice(0,50).map(x=>{
+    const isUp=x.direction==='UP';
+    const closeCell=x.priceAtClose?`<span class="h-price">${fmt(x.priceAtClose)}</span>`:'<span style="color:var(--muted);font-size:10px">activo</span>';
+    const gapCell=x.gapFinal!=null
+      ?`<span class="h-gap ${x.gapFinal>=0?'p':'n'}">${x.gapFinal>=0?'+':''}${fmt(x.gapFinal)}</span>`
+      :'<span class="h-gap m">—</span>';
+    const badge=x.result==='WIN'?'<span class="badge win">WIN</span>':x.result==='LOSS'?'<span class="badge loss">LOSS</span>':'<span class="badge pend">PEND</span>';
+    return `<div class="hist-row">
+      <span class="h-slot">${x.slotLabel}</span>
+      <span class="${isUp?'dir-u':'dir-d'}">${isUp?'↑ UP':'↓ DOWN'}</span>
+      <span class="h-conf">${x.confidence}%</span>
+      <span class="h-price">${fmt(x.ptb)}</span>
+      ${closeCell}
+      ${gapCell}
+      ${badge}
+    </div>`;
+  }).join('');
+}
+
+function clearHistory(){
+  if(confirm('¿Borrar todo el historial de predicciones?')){
+    localStorage.removeItem(HIST_KEY);
+    renderHistory();
+  }
+}
+
+// ─── CORS fetch ───
+async function safeFetch(url){
+  try{const r=await fetch(url,{signal:AbortSignal.timeout(6000)});if(r.ok)return r.json();}
+  catch(e){console.warn('[safeFetch] directo falló:', e.message);}
+  try{const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,{signal:AbortSignal.timeout(8000)});if(r.ok){const w=await r.json();return JSON.parse(w.contents);}}
+  catch(e){console.warn('[safeFetch] allorigins falló:', e.message);}
+  try{
+    const r=await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`,{signal:AbortSignal.timeout(8000)});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
+  }catch(e){console.error('[safeFetch] todos los proxies fallaron:', e.message); return null;}
+}
+
+// ─── Binance ───
+async function fetchBTCBinance(){
+  try{const d=await safeFetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');if(d?.price)return{usd:parseFloat(d.price),usd_24h_change:0};}
+  catch(e){console.warn('[fetchBTC] Binance falló:', e.message);}
+  try{
+    const d=await safeFetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true');
+    if(!d?.bitcoin) throw new Error('CoinGecko respuesta inválida');
+    return d.bitcoin;
+  }catch(e){console.error('[fetchBTC] CoinGecko también falló:', e.message); throw e;}
+}
+
+// ─── Chainlink precio via Polymarket RTDS WebSocket (browser nativo) ───
+// wss://ws-live-data.polymarket.com — sin autenticación, mismo precio que Polymarket
+let chainlinkPrice = null;
+let priceHistory = []; // {price, ts} ultimos 2 minutos
+let predictionScheduled = false; // evitar predicciones duplicadas
+let chainlinkTs = null;
+let rtdsWs = null;
+
+function connectRTDS() {
+  if (rtdsWs && rtdsWs.readyState === WebSocket.OPEN) return;
+  try {
+    rtdsWs = new WebSocket('wss://ws-live-data.polymarket.com');
+    let pingInterval = null;
+
+    rtdsWs.onopen = () => {
+      rtdsWs.send(JSON.stringify({
+        action: 'subscribe',
+        subscriptions: [{
+          topic: 'crypto_prices_chainlink',
+          type: '*',
+          filters: JSON.stringify({ symbol: 'btc/usd' })
+        }]
+      }));
+      // Mantener conexión viva con PING cada 5s
+      pingInterval = setInterval(() => {
+        if (rtdsWs.readyState === WebSocket.OPEN) rtdsWs.send('ping');
+      }, 5000);
+    };
+
+    rtdsWs.onmessage = (event) => {
+      if (event.data === 'pong') return;
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.topic === 'crypto_prices_chainlink' && msg.payload?.symbol === 'btc/usd') {
+          chainlinkPrice = parseFloat(msg.payload.value);
+          chainlinkTs = msg.payload.timestamp;
+          if (chainlinkPrice > 0) {
+            currentBTC = chainlinkPrice;
+            $('curVal').textContent = fmt(chainlinkPrice);
+            $('curSub').textContent = 'Chainlink — ' + fmtTime();
+            updateDiff();
+            addChartPrice(chainlinkPrice);
+            // Guardar historial de precios intra-slot (últimos 2 min)
+            const now = Date.now();
+            priceHistory.push({price: chainlinkPrice, ts: now});
+            priceHistory = priceHistory.filter(p => now - p.ts < 120000); // 2 min
+
+            // ── PTB en tiempo real ──
+            const curSlotKey = getSlotKey();
+            const slotAgeMs = Date.now() - (curSlotKey * 1000);
+
+            // Siempre guardar el último precio Chainlink por slot en localStorage
+            // Esto permite recuperar el PTB exacto aunque la página se cargue tarde
+            try {
+              const slotCache = JSON.parse(localStorage.getItem('omega_slot_prices')||'{}');
+              // Guardar precio del slot ANTERIOR (ese es el PTB del slot actual)
+              const prevSlotKey = curSlotKey - 300;
+              if (!slotCache[curSlotKey] && slotAgeMs < 8000) {
+                // Primer mensaje del nuevo slot = precio de apertura exacto
+                slotCache[curSlotKey] = chainlinkPrice;
+                // Limpiar slots viejos (guardar solo últimos 12)
+                const keys = Object.keys(slotCache).map(Number).sort((a,b)=>b-a);
+                keys.slice(12).forEach(k => delete slotCache[k]);
+                localStorage.setItem('omega_slot_prices', JSON.stringify(slotCache));
+                console.log('[CACHE] Guardado precio apertura slot', curSlotKey, ':', chainlinkPrice);
+              }
+            } catch(e) {}
+
+            if (!ptbFixed || ptbSlotKey !== curSlotKey) {
+              if (slotAgeMs < 12000) {
+                // Inicio real del slot — precio de apertura Chainlink exacto
+                ptbFixed = chainlinkPrice;
+                ptbSlotKey = curSlotKey;
+                $('ptbVal').textContent = fmt(ptbFixed);
+                $('ptbSub').textContent = 'Chainlink (Polymarket) ✓';
+                console.log('[PTB] ✅ Fijado al inicio del slot:', ptbFixed);
+                updateDiff();
+              }
+              // Si llegamos tarde al slot, NO sobreescribir — fetchSlotOpenPrice lo maneja
+            }
+          }
+        }
+      } catch(e) {}
+    };
+
+    rtdsWs.onclose = () => {
+      if (pingInterval) clearInterval(pingInterval);
+      // Reconectar tras 3s
+      setTimeout(connectRTDS, 3000);
+    };
+
+    rtdsWs.onerror = () => {
+      if (pingInterval) clearInterval(pingInterval);
+      rtdsWs.close();
+    };
+  } catch(e) {}
+}
+
+// Obtener precio Chainlink (espera hasta 5s por el WebSocket)
+function waitChainlinkPrice(maxMs = 5000) {
+  return new Promise((resolve, reject) => {
+    if (chainlinkPrice && chainlinkPrice > 0) { resolve(chainlinkPrice); return; }
+    const start = Date.now();
+    const iv = setInterval(() => {
+      if (chainlinkPrice && chainlinkPrice > 0) { clearInterval(iv); resolve(chainlinkPrice); }
+      else if (Date.now() - start > maxMs) { clearInterval(iv); reject(new Error('RTDS timeout')); }
+    }, 100);
+  });
+}
+
+// Fallback: Binance
+async function fetchBTCBinance(){
+  try{const d=await safeFetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');if(d?.price)return{usd:parseFloat(d.price),usd_24h_change:0};}
+  catch(e){console.warn('[fetchBTC] Binance falló:', e.message);}
+  try{
+    const d=await safeFetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true');
+    if(!d?.bitcoin) throw new Error('CoinGecko respuesta inválida');
+    return d.bitcoin;
+  }catch(e){console.error('[fetchBTC] CoinGecko también falló:', e.message); throw e;}
+}
+
+// PTB = precio Chainlink al inicio del slot
+async function fetchSlotOpenPrice(){
+  const curSlot = getSlotKey();
+
+  // PASO 1: Ya fijado para este slot
+  if(ptbFixed && ptbSlotKey === curSlot){
+    return { price: ptbFixed, source: 'Chainlink (Polymarket) ✓' };
+  }
+
+  const slotStart = curSlot * 1000;
+  const secsIntoSlot = Math.floor((Date.now() - slotStart) / 1000);
+
+  // PASO 2: Caché localStorage
+  try {
+    const slotCache = JSON.parse(localStorage.getItem('omega_slot_prices')||'{}');
+    if(slotCache[curSlot] && slotCache[curSlot] > 0){
+      console.log('[PTB] ✅ Desde caché localStorage:', slotCache[curSlot]);
+      return { price: slotCache[curSlot], source: 'Chainlink (Polymarket) ✓' };
+    }
+  } catch(e) {}
+
+  // PASO 3: API de Polymarket past-results — closePrice del slot anterior = openPrice del slot actual
+  try {
+    const slotISO = new Date(curSlot * 1000).toISOString();
+    const url = `https://polymarket.com/api/past-results?symbol=BTC&variant=fiveminute&assetType=crypto&currentEventStartTime=${slotISO}&count=1`;
+    const d = await safeFetch(url);
+    if(d?.data?.results?.length > 0){
+      const lastResult = d.data.results[d.data.results.length - 1];
+      const openPrice = lastResult.closePrice;
+      if(openPrice > 0){
+        console.log('[PTB] ✅ Polymarket past-results:', openPrice);
+        // Guardar en caché
+        try {
+          const slotCache = JSON.parse(localStorage.getItem('omega_slot_prices')||'{}');
+          slotCache[curSlot] = openPrice;
+          localStorage.setItem('omega_slot_prices', JSON.stringify(slotCache));
+        } catch(e) {}
+        return { price: openPrice, source: 'Chainlink (Polymarket) ✓' };
+      }
+    }
+  } catch(e) { console.warn('[PTB] Polymarket API error:', e.message); }
+
+  // PASO 4: Si estamos en los primeros 10s, esperar WS
+  if(secsIntoSlot < 10){
+    const wsPrice = await waitChainlinkPrice(8000).catch(()=>null);
+    if(wsPrice && wsPrice > 0){
+      console.log('[PTB] ✅ Chainlink WS inicio de slot:', wsPrice);
+      return { price: wsPrice, source: 'Chainlink (Polymarket) ✓' };
+    }
+  }
+
+  // PASO 5: Binance kline open
+  try{
+    const d=await safeFetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=5m&startTime='+slotStart+'&limit=1');
+    if(d?.length>0 && parseFloat(d[0][1]) > 0){
+      return { price: parseFloat(d[0][1]), source: 'Binance open ~PTB' };
+    }
+  }catch(e){}
+
+  // PASO 6: Coinbase candle open
+  try{
+    const d=await safeFetch('https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=300&start='+curSlot+'&end='+(curSlot+300));
+    if(d?.length>0 && parseFloat(d[0][3]) > 0){
+      return { price: parseFloat(d[0][3]), source: 'Coinbase open ~PTB' };
+    }
+  }catch(e){}
+
+  // PASO 7: último recurso Chainlink actual
+  const wsNow = await waitChainlinkPrice(3000).catch(()=>null);
+  if(wsNow && wsNow > 0){
+    return { price: wsNow, source: 'Chainlink spot (fallback)' };
+  }
+
+  return null;
+}
+
+// ─── Polymarket ───
+async function fetchPolyBTC5m(){
+  try {
+    const r = await fetch('https://omega-production-d6f1.up.railway.app/polymarket', {signal: AbortSignal.timeout(8000)});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } catch(e) {
+    console.error('[Polymarket] Error:', e.message);
+    throw e;
+  }
+}
+
+// ─── Order Book & Trades ───
+async function fetchOrderBookSignal(tokenUp, tokenDown){
+  if(!tokenUp || !tokenDown) return null;
+  try {
+    // Consultar order book de ambos tokens en paralelo
+    const [bookUp, bookDown, tradesUp] = await Promise.all([
+      safeFetch(`https://clob.polymarket.com/book?token_id=${tokenUp}`).catch(()=>null),
+      safeFetch(`https://clob.polymarket.com/book?token_id=${tokenDown}`).catch(()=>null),
+      safeFetch(`https://data-api.polymarket.com/trades?token_id=${tokenUp}&limit=10`).catch(()=>null),
+    ]);
+
+    if(!bookUp || !bookDown) return null;
+
+    // Calcular presión del order book
+    // bids = compradores, asks = vendedores
+    const sumSizes = arr => (arr||[]).slice(0,5).reduce((s,o) => s + parseFloat(o.size||0), 0);
+
+    const upBids = sumSizes(bookUp.bids);   // compradores de UP
+    const upAsks = sumSizes(bookUp.asks);   // vendedores de UP
+    const dnBids = sumSizes(bookDown.bids); // compradores de DOWN
+    const dnAsks = sumSizes(bookDown.asks); // vendedores de DOWN
+
+    // Presión neta: más bids que asks = presión compradora = bullish
+    const upPressure = upBids - upAsks;
+    const dnPressure = dnBids - dnAsks;
+    const netSignal = upPressure - dnPressure; // positivo = bullish
+
+    // Analizar trades recientes
+    let recentBuys = 0, recentSells = 0;
+    if(tradesUp && Array.isArray(tradesUp)){
+      tradesUp.slice(0,5).forEach(t => {
+        t.side === 'BUY' ? recentBuys++ : recentSells++;
+      });
+    }
+
+    // Signal final: -3 a +3
+    let signal = 0;
+    if(netSignal > 500) signal += 2;
+    else if(netSignal > 100) signal += 1;
+    else if(netSignal < -500) signal -= 2;
+    else if(netSignal < -100) signal -= 1;
+
+    if(recentBuys > recentSells + 2) signal += 1;
+    else if(recentSells > recentBuys + 2) signal -= 1;
+
+    signal = Math.max(-3, Math.min(3, signal));
+
+    return {
+      signal,
+      upBids: upBids.toFixed(0), upAsks: upAsks.toFixed(0),
+      dnBids: dnBids.toFixed(0), dnAsks: dnAsks.toFixed(0),
+      recentBuys, recentSells,
+      desc: `Order book: UP bids $${upBids.toFixed(0)} vs asks $${upAsks.toFixed(0)} | trades recientes: ${recentBuys} compras / ${recentSells} ventas → ${signal>0?'presión ALCISTA':signal<0?'presión BAJISTA':'neutral'}`
+    };
+  } catch(e) {
+    return null;
+  }
+}
+
+// ─── Fear & Greed ───
+async function fetchFG(){
+  try{return(await safeFetch('https://api.alternative.me/fng/?limit=1')).data[0];}
+  catch{return{value:'—',value_classification:'Unknown'};}
+}
+
+// ─── Render Polymarket ───
+function renderPoly(m){
+  $('polyWrap').innerHTML=`<div class="poly-item">
+    <div class="pi-q">${m.question}</div>
+    ${ptbFixed?`<div class="pi-ptb">📍 Price to Beat: ${fmt(ptbFixed)}</div>`:''}
+    <div class="pi-foot">
+      <span class="pi-yes">↑ UP ${m.upPct}%</span>
+      <div class="pi-bar"><div class="pi-y" style="width:${m.upPct}%"></div><div class="pi-n" style="width:${m.downPct}%"></div></div>
+      <span class="pi-no">${m.downPct}% DOWN ↓</span>
+    </div>
+    ${m.volume>0?`<div class="pi-vol" style="${m.volume<3000?'color:var(--red)':m.volume<8000?'color:var(--gold)':''}">Vol: ${fmtVol(m.volume)}${m.volume<3000?' ⚠ bajo':m.volume<8000?' ↓':''}</div>`:''}
+    <div style="margin-top:8px"><a href="${m.url}" target="_blank" style="font-size:10px;color:var(--accent);text-decoration:none">→ Ver en Polymarket</a></div>
+  </div>`;
+}
+
+// ─── Claude ───
+function getMacroTrend(){
+  // Tendencia general de la última hora basada en slots cerrados
+  try {
+    const hist = JSON.parse(localStorage.getItem('omega_hist_v2')||'[]');
+    const closed = hist.filter(h => h.result && h.result !== 'PENDING' && h.priceAtClose && h.ptb);
+    const last12 = closed.slice(0,12); // última hora aprox
+    if(last12.length < 4) return { trend: 0, desc: 'pocos datos', bullPct: 50 };
+    const ups = last12.filter(h => h.priceAtClose >= h.ptb).length;
+    const downs = last12.length - ups;
+    const bullPct = (ups / last12.length) * 100;
+    // Calcular pendiente de precios de cierre
+    const prices = last12.map(h => h.priceAtClose).reverse();
+    const firstHalf = prices.slice(0, Math.floor(prices.length/2));
+    const secondHalf = prices.slice(Math.floor(prices.length/2));
+    const avgFirst = firstHalf.reduce((a,b)=>a+b,0)/firstHalf.length;
+    const avgSecond = secondHalf.reduce((a,b)=>a+b,0)/secondHalf.length;
+    const slope = avgSecond - avgFirst;
+    const trend = slope > 20 ? 2 : slope > 5 ? 1 : slope < -20 ? -2 : slope < -5 ? -1 : 0;
+    return {
+      trend, bullPct: bullPct.toFixed(0), slope: slope.toFixed(0),
+      desc: `última hora: ${ups}↑ ${downs}↓, tendencia ${slope>5?'alcista':slope<-5?'bajista':'lateral'} (${slope>=0?'+':''}${slope.toFixed(0)} USD)`
+    };
+  } catch(e) { return { trend: 0, desc: 'error', bullPct: 50 }; }
+}
+
+function getVolatility(){
+  // Volatilidad del slot actual basada en historial de precios
+  if(priceHistory.length < 4) return { high: 0, low: 0, range: 0, volatile: false };
+  const prices = priceHistory.map(p => p.price);
+  const high = Math.max(...prices);
+  const low = Math.min(...prices);
+  const range = high - low;
+  const volatile = range > 60; // más de $60 de rango = slot volátil
+  return { high, low, range: range.toFixed(0), volatile,
+    desc: `rango $${range.toFixed(0)} (${volatile?'⚡ VOLÁTIL':'estable'})` };
+}
+
+function getLateralMarket(){
+  // Detecta si BTC está en rango estrecho (mercado lateral = menos predecible)
+  if(priceHistory.length < 5) return { lateral: false, range: 0, desc: 'sin datos' };
+  const prices = priceHistory.map(p => p.price);
+  const high = Math.max(...prices);
+  const low = Math.min(...prices);
+  const range = high - low;
+  const avgPrice = prices.reduce((a,b)=>a+b,0)/prices.length;
+  const rangePct = (range/avgPrice)*100;
+  // Lateral si rango < 0.05% del precio en los últimos 2 min
+  const lateral = rangePct < 0.05 && priceHistory.length >= 10;
+  return {
+    lateral, range: range.toFixed(1), rangePct: rangePct.toFixed(3),
+    desc: lateral ? `mercado LATERAL (rango $${range.toFixed(0)}, ${rangePct.toFixed(3)}%)` :
+                    `mercado activo (rango $${range.toFixed(0)}, ${rangePct.toFixed(3)}%)`
+  };
+}
+
+function getHourOfDayBias(){
+  // Usa memoria acumulada para calcular bias por hora del día
+  const m = loadMemory();
+  const hour = new Date().getHours();
+  if(!m.hourStats || !m.hourStats[hour]) return { bias: 0, wr: 50, slots: 0, desc: 'sin datos para esta hora' };
+  const h = m.hourStats[hour];
+  const total = h.wins + h.losses;
+  if(total < 3) return { bias: 0, wr: 50, slots: total, desc: `solo ${total} slots a las ${hour}h` };
+  const wr = h.wins / total;
+  // bias: -1 a +1, donde +1 = siempre gana, -1 = siempre pierde
+  const bias = (wr - 0.5) * 2;
+  return {
+    bias, wr: (wr*100).toFixed(0), slots: total,
+    desc: `a las ${hour}h: ${(wr*100).toFixed(0)}% WR histórico (${total} slots) → ${bias>0.2?'hora favorable':'hora desfavorable'}`
+  };
+}
+
+function getConfidenceBias(){
+  // ¿Las predicciones de alta confianza realmente ganan más?
+  const m = loadMemory();
+  if(!m.conditionStats) return { highWR: 50, midWR: 50, lowWR: 50, calibrated: false };
+  const get = (key) => {
+    const c = m.conditionStats['conf_'+key];
+    if(!c || (c.wins+c.losses) < 3) return 50;
+    return Math.round(c.wins/(c.wins+c.losses)*100);
+  };
+  return {
+    highWR: get('high'), midWR: get('mid'), lowWR: get('low'),
+    calibrated: true,
+    desc: `WR por confianza — alta:${get('high')}% med:${get('mid')}% baja:${get('low')}%`
+  };
+}
+
+function getMacroPriceTrend(){
+  // Detecta tendencia de precio usando los últimos 6 slots cerrados
+  try {
+    const hist = loadHist().filter(h => h.priceAtClose && h.ptb && h.result !== 'PENDING');
+    const last6 = hist.slice(0, 6);
+    if(last6.length < 3) return { trend: 0, slope: 0, desc: 'sin datos' };
+
+    // Precios de cierre ordenados cronológicamente (último primero en hist)
+    const prices = last6.map(h => h.priceAtClose).reverse();
+    const first = prices[0];
+    const last = prices[prices.length - 1];
+    const totalMove = last - first;
+    if(prices.length < 2) return { trend: 0, slope: 0, desc: 'sin datos suficientes' };
+    const avgMove = totalMove / (prices.length - 1);
+
+    // Contar cuántos slots subieron vs bajaron
+    let ups = 0, downs = 0;
+    for(let i = 1; i < prices.length; i++){
+      prices[i] >= prices[i-1] ? ups++ : downs++;
+    }
+
+    // Tendencia fuerte: >$80 total en 6 slots (bajado de $150)
+    const strongBull = totalMove > 80;
+    const strongBear = totalMove < -80;
+    // Tendencia moderada: >$30 (bajado de $60)
+    const modBull = totalMove > 30;
+    const modBear = totalMove < -30;
+
+    // Consistencia direccional: si 4+ de 5 slots van en la misma dirección
+    const bearConsistent = downs >= 4;
+    const bullConsistent = ups >= 4;
+
+    let trend = strongBull ? 3 : modBull ? 2 : totalMove > 10 ? 1 :
+                strongBear ? -3 : modBear ? -2 : totalMove < -10 ? -1 : 0;
+    if(bearConsistent && trend >= -1) trend = Math.min(trend - 1, -2);
+    if(bullConsistent && trend <= 1)  trend = Math.max(trend + 1, 2);
+
+    return {
+      trend, totalMove: totalMove.toFixed(0), avgMove: avgMove.toFixed(0),
+      ups, downs,
+      desc: `últimos ${last6.length} slots: ${totalMove>=0?'+':''}${totalMove.toFixed(0)} USD total (${ups}↑ ${downs}↓) → tendencia ${trend>1?'ALCISTA FUERTE':trend>0?'alcista':trend<-1?'BAJISTA FUERTE':trend<0?'bajista':'lateral'}`
+    };
+  } catch(e) {
+    return { trend: 0, slope: 0, desc: 'error' };
+  }
+}
+
+function getCandleMomentum(){
+  // Analiza las últimas 3 velas de 5min usando el historial de slots cerrados
+  try {
+    const hist = loadHist().filter(h => h.result && h.result !== 'PENDING' && h.priceAtClose && h.ptb);
+    const last3 = hist.slice(0, 3);
+    if(last3.length < 2) return { signal: 0, consecutive: 0, desc: 'sin datos de velas' };
+
+    // Dirección de cada vela: cierre vs apertura (ptb)
+    const candles = last3.map(h => ({
+      bullish: h.priceAtClose >= h.ptb,
+      gap: h.priceAtClose - h.ptb,
+      pct: ((h.priceAtClose - h.ptb) / h.ptb * 100)
+    }));
+
+    // Contar velas consecutivas en la misma dirección
+    let consecutive = 1;
+    for(let i = 1; i < candles.length; i++){
+      if(candles[i].bullish === candles[0].bullish) consecutive++;
+      else break;
+    }
+
+    const bullish = candles[0].bullish;
+    const avgGap = candles.reduce((s,c) => s + c.gap, 0) / candles.length;
+    // Signal fuerte si 3 velas consecutivas en misma dirección
+    const signal = bullish ?
+      (consecutive >= 3 ? 3 : consecutive >= 2 ? 2 : 1) :
+      (consecutive >= 3 ? -3 : consecutive >= 2 ? -2 : -1);
+
+    return {
+      signal,
+      consecutive,
+      bullish,
+      avgGap: avgGap.toFixed(1),
+      desc: `últimas ${last3.length} velas: ${consecutive} ${bullish?'alcistas':'bajistas'} consecutivas (avg gap ${avgGap>=0?'+':''}${avgGap.toFixed(0)})`
+    };
+  } catch(e) {
+    return { signal: 0, consecutive: 0, desc: 'error' };
+  }
+}
+
+function getIntraSlotMomentum(){
+  // Analiza la dirección del precio en los últimos 2 minutos
+  if(priceHistory.length < 3) return { trend: 0, desc: 'sin datos', slope: 0 };
+  const now = Date.now();
+  const last30s = priceHistory.filter(p => now - p.ts < 30000);
+  const last60s = priceHistory.filter(p => now - p.ts < 60000);
+  const last120s = priceHistory;
+
+  // Calcular pendiente simple: precio actual vs precio hace N segundos
+  const calcSlope = (arr) => {
+    if(arr.length < 2) return 0;
+    return arr[arr.length-1].price - arr[0].price;
+  };
+
+  const slope30 = calcSlope(last30s);   // últimos 30s
+  const slope60 = calcSlope(last60s);   // último minuto
+  const slope120 = calcSlope(last120s); // últimos 2 min
+
+  // Señal combinada — más peso a lo reciente
+  const signal = slope30 * 3 + slope60 * 2 + slope120 * 1;
+  const trend = signal > 5 ? 1 : signal < -5 ? -1 : 0;
+
+  return {
+    trend,
+    slope30: slope30.toFixed(1),
+    slope60: slope60.toFixed(1),
+    slope120: slope120.toFixed(1),
+    signal: signal.toFixed(1),
+    desc: trend > 0 ? `precio subiendo (30s: +${slope30.toFixed(0)}, 60s: +${slope60.toFixed(0)})` :
+          trend < 0 ? `precio bajando (30s: ${slope30.toFixed(0)}, 60s: ${slope60.toFixed(0)})` :
+          'precio lateral'
+  };
+}
+
+function getRecentMomentum(){
+  // Leer últimos 5 slots cerrados del historial para calcular momentum real
+  try {
+    const hist = JSON.parse(localStorage.getItem('omega_hist_v2')||'[]');
+    const closed = hist.filter(h => h.result && h.result !== 'PENDING' && h.priceAtClose && h.ptb);
+    const last5 = closed.slice(0,5);
+    if(last5.length === 0) return { trend: 0, wins: 0, losses: 0, avgGap: 0, desc: 'sin datos' };
+
+    let upCount = 0, downCount = 0, totalGap = 0;
+    const details = [];
+    last5.forEach(h => {
+      const gap = h.priceAtClose - h.ptb;
+      totalGap += gap;
+      if(gap >= 0) upCount++; else downCount++;
+      details.push((gap>=0?'+':'')+gap.toFixed(0));
+    });
+
+    const avgGap = totalGap / last5.length;
+    const trend = upCount - downCount; // positivo = alcista, negativo = bajista
+    return {
+      trend,
+      upCount,
+      downCount,
+      avgGap: avgGap.toFixed(1),
+      desc: `últimos ${last5.length} slots: ${upCount} subieron / ${downCount} bajaron, gap promedio ${avgGap>=0?'+':''}${avgGap.toFixed(0)}`,
+      details: details.join(', ')
+    };
+  } catch(e) {
+    return { trend: 0, upCount: 0, downCount: 0, avgGap: 0, desc: 'error leyendo historial' };
+  }
+}
+
+async function askClaude(btcPrice,change24h,polyData,fg,orderBook){
+  const ptb=ptbFixed||btcPrice||0,diff=btcPrice?(btcPrice-ptb):0;
+  const pct=ptb?(diff/ptb*100):0;
+  const upPct=parseFloat(polyData?.upPct||50);
+  const downPct=parseFloat(polyData?.downPct||50);
+  const secsLeft=Math.max(0,Math.floor((getNextSlotMs()-Date.now())/1000));
+  const fearIdx=parseInt(fg.value||50);
+
+  // ── Señales de mercado ──
+  const mom = getRecentMomentum();
+  const intra = getIntraSlotMomentum();
+  const macro = getMacroTrend();
+  const vol = getVolatility();
+  const mem = getMemoryInsights();
+  const lateral = getLateralMarket();
+  const hourBias = getHourOfDayBias();
+  const confBias = getConfidenceBias();
+  const candle = getCandleMomentum();
+  const macroPriceTrend = getMacroPriceTrend();
+  const obSignal = orderBook?.signal || 0;
+  const polyVol = polyData?.volume || 0;
+  const polyVolSignal = polyVol > 30000 ? 'ALTO ($'+Math.round(polyVol/1000)+'K) — crowd confiable' :
+                        polyVol > 10000 ? 'MEDIO ($'+Math.round(polyVol/1000)+'K)' :
+                        'BAJO ($'+Math.round(polyVol/1000)+'K) — odds poco confiables';
+
+  // ── Pesos dinámicos — aprenden de los últimos 20 slots ──────────────────────
+  function getDynamicWeights(){
+    try {
+      const hist = loadHist().filter(h => h.result && h.result !== 'PENDING' && h.priceAtClose && h.ptb);
+      const last20 = hist.slice(0, 20);
+      if(last20.length < 5) return { intra:5, mom:3, macroPrice:5, ob:2, candle:2, gap:2, streak:0, recentWR:50 };
+
+      // Win rate reciente
+      const wins = last20.filter(h => h.result === 'WIN').length;
+      const recentWR = Math.round(wins / last20.length * 100);
+
+      // Detectar bias de dirección — si lleva 4+ slots en la misma dirección, penalizar
+      let streakDir = last20[0].direction, streakCount = 1;
+      for(let i = 1; i < Math.min(6, last20.length); i++){
+        if(last20[i].direction === streakDir) streakCount++;
+        else break;
+      }
+      const streakPenalty = streakCount >= 4 ? -3 : streakCount >= 3 ? -1.5 : 0;
+
+      // Calcular qué tan bien predijo cada señal en los últimos 20 slots
+      // Order book: ¿cuándo el OB era bullish, ganó?
+      // Simplificado: si WR reciente < 45%, reducir pesos de momentum y aumentar contrarian
+      const momWeight   = recentWR < 45 ? 1.0 : recentWR > 60 ? 4.0 : 3.0;
+      const intraWeight = recentWR < 45 ? 2.0 : recentWR > 60 ? 6.0 : 5.0;
+      const macroWeight = recentWR < 45 ? 3.0 : recentWR > 60 ? 6.0 : 5.0;
+      const obWeight    = recentWR < 45 ? 3.0 : 2.0; // order book más importante cuando momentum falla
+      const candleW     = recentWR < 45 ? 1.0 : 2.0;
+
+      // Detectar si el mercado está revirtiendo (últimas 3 velas contradicen tendencia)
+      const last3dirs = last20.slice(0,3).map(h => h.priceAtClose >= h.ptb ? 1 : -1);
+      const last3sum = last3dirs.reduce((a,b)=>a+b,0);
+      const reversing = Math.abs(last3sum) <= 1; // mercado lateral/reversión
+
+      return { intra: intraWeight, mom: momWeight, macroPrice: macroWeight, ob: obWeight, candle: candleW,
+               gap: 2, streak: streakPenalty, recentWR, streakCount, streakDir, reversing };
+    } catch(e) {
+      return { intra:5, mom:3, macroPrice:5, ob:2, candle:2, gap:2, streak:0, recentWR:50 };
+    }
+  }
+  const dw = getDynamicWeights();
+
+  // ── Score compuesto con pesos dinámicos ───────────────────────────────────
+  let bullPts = 0, bearPts = 0;
+
+  // 1. Momentum intra-slot (peso dinámico)
+  const intraSignal = parseFloat(intra.signal)||0;
+  const intraBearPenalty = (macroPriceTrend.trend <= -2) ? 0.5 : 1.0;
+  const intraBullPenalty = (macroPriceTrend.trend >= 2) ? 0.5 : 1.0;
+  if(intraSignal > 0) bullPts += Math.min(dw.intra, intraSignal/10) * intraBearPenalty;
+  else if(intraSignal < 0) bearPts += Math.min(dw.intra, Math.abs(intraSignal)/10) * intraBullPenalty;
+
+  // 2. Momentum slots recientes (peso dinámico)
+  if(mom.trend > 0) bullPts += Math.min(dw.mom, mom.trend * 1.2);
+  else if(mom.trend < 0) bearPts += Math.min(dw.mom, Math.abs(mom.trend) * 1.2);
+
+  // 3. Gap actual vs PTB ajustado por tiempo (peso 2)
+  const timeWeight = secsLeft > 180 ? 0.5 : secsLeft > 120 ? 1 : secsLeft > 60 ? 2 : 3.5;
+  const gapScore = Math.min(dw.gap, Math.abs(pct) * 20 * (timeWeight/4));
+  if(diff > 0) bullPts += gapScore; else bearPts += gapScore;
+
+  // 4. Promedio gap reciente (peso 1.5)
+  const avgGapNum = parseFloat(mom.avgGap)||0;
+  if(avgGapNum > 20) bullPts += 1.5;
+  else if(avgGapNum > 0) bullPts += 0.75;
+  else if(avgGapNum < -20) bearPts += 1.5;
+  else if(avgGapNum < 0) bearPts += 0.75;
+
+  // 5. Macro tendencia hora (peso 2)
+  if(macro.trend > 0) bullPts += Math.min(2, macro.trend);
+  else if(macro.trend < 0) bearPts += Math.min(2, Math.abs(macro.trend));
+
+  // 6. Polymarket ponderado por volumen (peso 0.5-1.5)
+  const polyEdge = Math.abs(upPct - 50) / 50;
+  const polyWeight = polyVol > 30000 ? 1.5 : polyVol > 10000 ? 1.0 : 0.3;
+  if(upPct > downPct) bullPts += polyEdge * polyWeight; else bearPts += polyEdge * polyWeight;
+
+  // 7. Fear & Greed (peso 0.5)
+  if(fearIdx < 30) bullPts += 0.5; else if(fearIdx > 70) bearPts += 0.5;
+
+  // 8. Tendencia macro de precio (peso dinámico)
+  if(macroPriceTrend.trend > 0) bullPts += Math.min(dw.macroPrice, macroPriceTrend.trend * 1.5);
+  else if(macroPriceTrend.trend < 0) bearPts += Math.min(dw.macroPrice, Math.abs(macroPriceTrend.trend) * 1.5);
+
+  // 9. Order book presión (peso dinámico — más importante cuando momentum falla)
+  if(obSignal > 0) bullPts += Math.min(dw.ob, obSignal * 0.7);
+  else if(obSignal < 0) bearPts += Math.min(dw.ob, Math.abs(obSignal) * 0.7);
+
+  // 10. Momentum de velas (peso dinámico)
+  if(candle.signal > 0) bullPts += Math.min(dw.candle, candle.signal * 0.7);
+  else if(candle.signal < 0) bearPts += Math.min(dw.candle, Math.abs(candle.signal) * 0.7);
+
+  // 11. Hora del día desde memoria (peso 1.5)
+  if(hourBias.bias > 0.2) bullPts += hourBias.bias * 1.5;
+  else if(hourBias.bias < -0.2) bearPts += Math.abs(hourBias.bias) * 1.5;
+
+  // 12. Penalización por streak — si lleva 4+ slots en la misma dirección, penalizar esa dirección
+  if(dw.streak < 0){
+    if(dw.streakDir === 'UP') bullPts += dw.streak; // resta puntos bull
+    else bearPts += dw.streak; // resta puntos bear
+    bullPts = Math.max(0, bullPts);
+    bearPts = Math.max(0, bearPts);
+  }
+
+  // 13. Mercado en reversión — reducir confianza en señales de momentum
+  if(dw.reversing){
+    bullPts *= 0.85;
+    bearPts *= 0.85;
+  }
+
+  // Volatilidad + mercado lateral — penalizar confianza
+  const volPenalty = vol.volatile ? 0.85 : 1.0;
+  const lateralPenalty = lateral.lateral ? 0.85 : 1.0;
+  const volumePenalty = polyVol < 3000 ? 0.75 : polyVol < 8000 ? 0.90 : 1.0;
+
+  const totalPts = bullPts + bearPts || 1;
+  const bullPct = (bullPts / totalPts * 100);
+
+  // Lógica de dirección v5.2 — thresholds + modo horario
+  // 1. Tendencia macro bajista
+  const strongBearTrend = macroPriceTrend.trend <= -2;
+  const veryStrongBearTrend = macroPriceTrend.trend <= -3;
+  const strongBullTrend = macroPriceTrend.trend >= 2;
+  const veryStrongBullTrend = macroPriceTrend.trend >= 3;
+
+  // 2. Modo horario — ajustar threshold según WR histórico por hora
+  const curHour = new Date().getHours();
+  // WR por hora confirmado con 459 slots:
+  // Malas: 11h(50%), 12h(50%), 23h(50%), 16h(56%) → más restrictivo
+  // Buenas: 17h(68%), 14h(67%), 20h(67%), 00h(67%), 09h(75%) → más permisivo
+  // Muy buenas: 18h(67%), 15h(64%), 13h(60%)
+  const hourConfig = {
+    0:  { th: 54, confBoost: 3,  label: 'buena',   color: 'green' },
+    9:  { th: 52, confBoost: 5,  label: 'buena',   color: 'green' },
+    10: { th: 57, confBoost: 0,  label: 'normal',  color: 'none'  },
+    11: { th: 63, confBoost: -5, label: 'débil',   color: 'red'   },
+    12: { th: 63, confBoost: -5, label: 'débil',   color: 'red'   },
+    13: { th: 57, confBoost: 0,  label: 'normal',  color: 'none'  },
+    14: { th: 54, confBoost: 3,  label: 'buena',   color: 'green' },
+    15: { th: 55, confBoost: 2,  label: 'buena',   color: 'green' },
+    16: { th: 60, confBoost: -3, label: 'débil',   color: 'red'   },
+    17: { th: 53, confBoost: 4,  label: 'buena',   color: 'green' },
+    18: { th: 53, confBoost: 4,  label: 'buena',   color: 'green' },
+    19: { th: 55, confBoost: 2,  label: 'buena',   color: 'green' },
+    20: { th: 54, confBoost: 3,  label: 'buena',   color: 'green' },
+    21: { th: 57, confBoost: 0,  label: 'normal',  color: 'none'  },
+    22: { th: 60, confBoost: -3, label: 'débil',   color: 'red'   },
+    23: { th: 63, confBoost: -5, label: 'débil',   color: 'red'   },
+  };
+  const hCfg = hourConfig[curHour] || { th: 57, confBoost: 0, label: 'normal', color: 'none' };
+  const hourBadgeLabel = hCfg.label === 'buena' ? '🟢 Hora buena' :
+                         hCfg.label === 'débil' ? '🔴 Hora débil' : '';
+  const hourBadgeColor = hCfg.color;
+
+  // 3. Threshold base desde hora + ajuste por tendencia macro
+  let upThreshold = hCfg.th;
+  if(strongBearTrend) upThreshold = Math.max(upThreshold, 67);
+  if(veryStrongBearTrend) upThreshold = Math.max(upThreshold, 75);
+  if(strongBullTrend) upThreshold = Math.min(upThreshold, 46);
+  if(veryStrongBullTrend) upThreshold = Math.min(upThreshold, 40);
+
+  // 4. Zona NEUTRAL — score ambiguo sin tendencia clara
+  const weakBearTrend = macroPriceTrend.trend === -1;
+  const neutralZone = (!strongBearTrend && !strongBullTrend && bullPct >= 47 && bullPct <= 57) ||
+                      (weakBearTrend && bullPct >= 50 && bullPct <= 62) ||
+                      (hCfg.label === 'débil' && bullPct >= 48 && bullPct <= 60);
+
+  const direction = bullPct >= upThreshold ? 'UP' : 'DOWN';
+  const baseConf = Math.round(50 + Math.abs(bullPct - upThreshold) * 0.9);
+  const rawConf = Math.round(Math.min(95, Math.max(35, baseConf)) * volPenalty * lateralPenalty * volumePenalty);
+  // Aplicar boost/penalización horaria
+  const hourAdjusted = Math.min(95, Math.max(35, rawConf + hCfg.confBoost));
+  // Penalizar confianza en zona neutral
+  const confidence = neutralZone ? Math.min(hourAdjusted, 52) : hourAdjusted;
+  // Calidad de señal — guía para el usuario
+  const signalQuality = neutralZone ? 'NEUTRAL' :
+    hCfg.label === 'débil' ? 'DÉBIL' :
+    confidence >= 68 ? 'FUERTE' :
+    confidence >= 58 ? 'MODERADA' : 'DÉBIL';
+
+  const prompt = `Eres un trader experto en BTC. Valida y ajusta esta predicción basándote en los datos.
+
+SLOT ACTUAL (${secsLeft}s restantes):
+- BTC actual: ${fmt(btcPrice)} | PTB: ${fmt(ptb)} | Gap: ${diff>=0?'+':''}${diff.toFixed(2)} (${pct.toFixed(3)}%)
+
+HORA DEL DÍA (memoria histórica):
+- ${hourBias.desc}
+- Bias: ${hourBias.bias > 0.2 ? '📈 hora favorable' : hourBias.bias < -0.2 ? '📉 hora desfavorable' : '➡️ neutral'}
+
+CALIBRACIÓN DE CONFIANZA (¿funciona el score?):
+- ${confBias.desc}
+- ${confBias.highWR > confBias.lowWR ? 'Confianza alta ES más confiable ✅' : 'Confianza alta NO predice mejor ⚠️ — tomar con cautela'}
+
+CONDICIÓN DEL MERCADO:
+- ${lateral.desc}
+- ${lateral.lateral ? '⚠️ Mercado lateral — predicción menos confiable' : '✅ Mercado con movimiento — señales más claras'}
+
+MEMORIA ESTADÍSTICA (aprendizaje de sesiones anteriores):
+- Total slots analizados: ${mem.totalSlots}
+- Win rate histórico global: ${mem.globalWR}%
+- ${mem.desc}
+- Bias por hora actual: ${mem.hourBias > 0.2 ? '📈 históricamente alcista a esta hora' : mem.hourBias < -0.2 ? '📉 históricamente bajista a esta hora' : 'neutral a esta hora'}
+
+TENDENCIA MACRO (última hora — contexto general):
+- ${macro.desc}
+- ${parseInt(macro.bullPct)}% de slots cerraron en positivo esta hora
+
+VOLATILIDAD DEL SLOT ACTUAL:
+- ${vol.desc}
+- Rango precio: $${vol.low?.toFixed(0)||'—'} — $${vol.high?.toFixed(0)||'—'}
+
+VOLUMEN POLYMARKET: ${polyVolSignal}
+
+ORDER BOOK EN TIEMPO REAL (dinero real apostado ahora):
+- ${orderBook ? orderBook.desc : 'No disponible'}
+- ${orderBook && orderBook.signal !== 0 ? (orderBook.signal > 0 ? '💰 Presión COMPRADORA en UP' : '💰 Presión VENDEDORA en UP') : 'Sin señal clara del order book'}
+
+TENDENCIA MACRO DE PRECIO (últimos 6 slots — dirección del mercado):
+- ${macroPriceTrend.desc}
+- ${Math.abs(macroPriceTrend.trend) >= 3 ? '🔥 TENDENCIA FUERTE — seguir la dirección' : Math.abs(macroPriceTrend.trend) >= 2 ? '📊 tendencia moderada' : '➡️ mercado lateral'}
+- REGLA: Si el precio lleva bajando más de $150 en 6 slots, DOWN tiene alta probabilidad aunque el gap actual sea pequeño
+
+MOMENTUM DE VELAS (últimos 3 slots cerrados — patrón de continuación):
+- ${candle.desc}
+- ${Math.abs(candle.signal) >= 3 ? '🔥 SEÑAL FUERTE — 3 velas consecutivas' : Math.abs(candle.signal) >= 2 ? '📊 señal moderada — 2 velas consecutivas' : '➡️ señal débil'}
+- ${candle.signal > 0 ? 'Momentum ALCISTA' : candle.signal < 0 ? 'Momentum BAJISTA' : 'Sin momentum claro'}
+
+MOMENTUM INTRA-SLOT (precio últimos 2 minutos — señal más inmediata):
+- ${intra.desc}
+- Últimos 30s: ${intra.slope30} USD | Último minuto: ${intra.slope60} USD
+- Score intra-slot: ${intra.signal} (positivo=subiendo, negativo=bajando)
+
+MOMENTUM RECIENTE (últimos slots cerrados):
+- ${mom.desc}
+- Gaps individuales: ${mom.details||'—'}
+- Tendencia: ${mom.trend > 1 ? '📈 ALCISTA' : mom.trend < -1 ? '📉 BAJISTA' : '➡️ LATERAL'}
+
+POLYMARKET: UP ${upPct}% / DOWN ${downPct}% (señal secundaria, muchas veces rezagada)
+
+SCORE CALCULADO: bullish ${bullPts.toFixed(1)} vs bearish ${bearPts.toFixed(1)} → ${direction} ${confidence}%
+
+REGLAS:
+- Si el momentum de los últimos 3+ slots es consistentemente bajista, DOWN tiene prioridad
+- El gap actual con ${secsLeft}s restantes: ${Math.abs(pct)<0.05?'pequeño, cualquier dirección posible':Math.abs(pct)<0.15?'moderado, necesita momentum':'grande, difícil de revertir'}
+- Polymarket suele rezagarse — si el mercado ya lleva 3 slots bajando, el 72% UP de Polymarket está desactualizado
+
+Responde SOLO con JSON sin markdown:
+{"direction":"${neutralZone ? 'NEUTRAL' : direction}","confidence":${confidence},"signalQuality":"${signalQuality}","neutralZone":${neutralZone},"hourBadge":"${hourBadgeLabel}","hourColor":"${hourBadgeColor}","ptbPrice":${Math.round(ptb)},"gap":${diff.toFixed(2)},"bullScore":${bullPts.toFixed(1)},"bearScore":${bearPts.toFixed(1)},"lstmDir":"${direction}","lstmPct":${bullPct.toFixed(1)},"techDir":"${direction}","techPct":${bullPct.toFixed(1)},"hybridDir":"${direction}","hybridPct":${bullPct.toFixed(1)},"pattern":null,"signals":[{"name":"Momentum slots","value":"${mom.upCount}↑ ${mom.downCount}↓","score":${Math.min(5,Math.abs(mom.trend)*1.5).toFixed(2)},"bullish":${mom.trend>=0}},{"name":"Gap vs PTB","value":"${diff>=0?'+':''}${diff.toFixed(0)}","score":${gapScore.toFixed(2)},"bullish":${diff>=0}},{"name":"Gap promedio","value":"${avgGapNum>=0?'+':''}${avgGapNum}","score":${Math.min(5,Math.abs(avgGapNum)/20).toFixed(2)},"bullish":${avgGapNum>=0}},{"name":"Polymarket","value":"UP ${upPct}%","score":${(polyEdge*2).toFixed(2)},"bullish":${upPct>=50}},{"name":"Fear & Greed","value":"${fearIdx}/100","score":${(Math.abs(fearIdx-50)/20).toFixed(2)},"bullish":${fearIdx<50}}],"sentiment":"${fearIdx<35?'Fear':fearIdx>65?'Greed':'Neutral'}","fundingRate":"0.0000%","exchangeFlow":"NEUTRAL","whaleActivity":"LOW","analysis":"2 oraciones en español: explica la predicción ${neutralZone?'NEUTRAL (no apostar)':direction} basándote principalmente en el momentum (${mom.desc}) y el gap actual de ${diff.toFixed(0)} con ${secsLeft}s restantes."}`;
+
+  const res=await fetch('https://omegabtc.site/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt}),signal:AbortSignal.timeout(15000)});
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error||`Error ${res.status}`);}
+  const data=await res.json();
+  if(data.error)throw new Error(data.error);
+  const raw=data.text.replace(/```json|```/g,'').trim();
+  const match=raw.match(/\{[\s\S]*\}/);
+  if(!match)throw new Error('Respuesta inválida de IA');
+  return JSON.parse(match[0]);
+}
+
+// ─── Render predicción ───
+function renderPred(pred){
+  const neutral=pred.direction==='NEUTRAL'||pred.neutralZone;
+  const up=neutral?false:pred.direction==='UP';
+  const gs=(pred.gap||0)>=0?'+':'-',ga=Math.abs(pred.gap||0).toFixed(2);
+  const secs=Math.max(15,Math.floor((getNextSlot()-new Date())/1000));
+  const sq=(pred.signalQuality||'DEBIL').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const sqLabel=pred.signalQuality||'DÉBIL';
+  const dirIcon = neutral ? '⚠️' : up ? '↑' : '↓';
+  const dirColor = neutral ? 'var(--gold)' : up ? 'var(--green)' : 'var(--red)';
+  const dirClass = neutral ? 'neutral' : up ? 'up' : 'down';
+  const dirLabel = neutral ? 'NEUTRAL' : pred.direction;
+  $('predWrap').className=`pred ${dirClass}`;
+  $('predWrap').innerHTML=`
+    <div class="pred-hdr">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:22px;color:${dirColor}">${dirIcon}</span>
+          <span class="pred-verdict ${dirClass}">${dirLabel}</span>
+          <span class="pred-lock">🔒 LOCKED</span>
+          <span class="signal-quality ${sq}">${sqLabel}</span>
+        </div>
+        <div class="pred-desc">Will beat ${fmt(pred.ptbPrice)} · ${gs}$${ga} gap · ${secs}s left</div>
+      </div>
+      <div class="cd-wrap" id="cdWrap"></div>
+    </div>
+    ${pred.hourBadge?`<div class="no-bet-banner" style="background:${pred.hourColor==='green'?'rgba(38,166,154,0.06)':pred.hourColor==='red'?'rgba(239,83,80,0.06)':'rgba(240,185,11,0.06)'};border-color:${pred.hourColor==='green'?'rgba(38,166,154,0.3)':pred.hourColor==='red'?'rgba(239,83,80,0.2)':'rgba(240,185,11,0.2)'};color:${pred.hourColor==='green'?'var(--green)':pred.hourColor==='red'?'var(--red)':'var(--gold)'}">${pred.hourBadge}</div>`:''}
+    ${neutral?`<div class="no-bet-banner">⚠️ Señal ambigua — mercado sin dirección clara. Considera no apostar este slot.</div>`:''}
+    ${!neutral&&!up&&(pred.confidence||0)>=65?`<div class="no-bet-banner" style="background:rgba(38,166,154,0.06);border-color:rgba(38,166,154,0.3);color:var(--green)">✅ DOWN tiene 72% WR histórico — señal confiable.</div>`:''}
+    ${!neutral&&up&&(pred.confidence||0)<58?`<div class="no-bet-banner" style="background:rgba(239,83,80,0.06);border-color:rgba(239,83,80,0.2);color:var(--red)">⚠️ UP con baja confianza (${pred.confidence}%) — UP tiene 57% WR. Precaución.</div>`:''}
+    ${pred.hourColor==='red'&&!neutral?`<div class="no-bet-banner" style="background:rgba(239,83,80,0.06);border-color:rgba(239,83,80,0.2);color:var(--red)">🔴 Hora históricamente débil — considera reducir apuestas.</div>`:''}
+    <div class="chips">
+      <div class="chip"><span class="chip-lbl">CONFIDENCE</span><span style="color:${(pred.confidence||0)>=68?'var(--green)':(pred.confidence||0)>=58?'var(--blue)':'var(--muted)'}">${pred.confidence}%</span></div>
+      <div class="chip"><span class="chip-lbl">GAP</span><span style="color:${(pred.gap||0)>=0?'var(--green)':'var(--red)'}">${gs}$${ga}</span></div>
+    </div>
+    <div class="model-grid">
+      ${[['LSTM',pred.lstmDir,pred.lstmPct],['TECHNICAL',pred.techDir,pred.techPct],['HYBRID',pred.hybridDir,pred.hybridPct]].map(([n,d,p])=>`
+        <div class="mc"><div class="mc-name">${n}</div>
+        <div class="mc-dir ${(d||'UP')==='UP'?'up':'down'}">${(d||'UP')==='UP'?'↑':'↓'} ${d||'—'}</div>
+        <div class="mc-pct">${p?p.toFixed(1):'—'}%</div></div>`).join('')}
+    </div>
+    ${pred.pattern?`<div class="pattern">📊 ${pred.pattern}</div>`:''}
+    <div class="sl" style="margin-top:0">Signal Breakdown</div>
+    <table class="sig-table">
+      ${(pred.signals||[]).map(s=>{const c=s.bullish?'var(--green)':'var(--red)';return`<tr><td class="sig-name">${s.name}</td><td class="sig-val">${s.value}</td><td class="sig-bar-wrap"><div class="sig-bg"><div class="sig-fill" style="width:${Math.min(100,(s.score/5)*100)}%;background:${c}"></div></div></td><td class="sig-score">${Number(s.score).toFixed(2)}</td></tr>`;}).join('')}
+    </table>
+    <div class="hdiv"></div>
+    <div class="sl" style="margin-bottom:6px">Análisis IA</div>
+    <div id="aiText" class="ai-text"></div>`;
+  startCountdown(secs,pred.direction);
+  const words=(pred.analysis||'').split(' '),el=$('aiText');
+  if(el){let i=0;const iv=setInterval(()=>{if(i<words.length){el.innerHTML+=(i>0?' ':'')+words[i];i++;}else clearInterval(iv);},60);}
+}
+
+function renderSent(pred,fg){
+  const fgV=parseInt(fg.value)||0;
+  $('s1').textContent=`${fg.value} — ${fg.value_classification}`;$('s1').className=`sc-val ${fgV>60?'g':fgV>35?'a':'r'}`;$('s1').style.fontSize='10px';
+  $('s2').textContent=pred.sentiment||'—';$('s2').className=`sc-val ${pred.sentiment==='Fearful'?'r':pred.sentiment==='Greedy'?'g':'a'}`;
+  $('s3').textContent='—';$('s3').className='sc-val a';
+  $('s4').textContent=pred.fundingRate||'—';$('s4').className='sc-val a';
+  const fl=(pred.exchangeFlow||'').toUpperCase();$('s5').textContent=fl||'—';$('s5').className=`sc-val ${fl==='INFLOW'?'g':fl==='OUTFLOW'?'r':'a'}`;
+  const wh=(pred.whaleActivity||'LOW').toUpperCase();$('s6').textContent=wh;$('s6').className=`sc-val ${wh==='HIGH'?'g':wh==='MEDIUM'?'a':'m'}`;
+}
+
+// ─── Slot timer con auto-close + auto-refresh ───
+let slotTimer=null, lastSlotKey=null;
+function getNextSlot(){
+  const n=new Date(),m=n.getMinutes(),nm=(Math.floor(m/5)+1)*5,next=new Date(n);
+  if(nm>=60){next.setHours(next.getHours()+1);next.setMinutes(0,0,0);}
+  else next.setMinutes(nm,0,0);
+  return next;
+}
+function startSlotTimer(){
+  if(slotTimer)clearInterval(slotTimer);
+  lastSlotKey=getSlotKey();
+  slotTimer=setInterval(()=>{
+    const now=new Date(),next=getNextSlot(),rem=Math.max(0,next-now),total=300000;
+    const pct=((total-rem)/total*100).toFixed(1);
+    const m=Math.floor(rem/60000),s=Math.floor((rem%60000)/1000);
+    const nh=next.getHours()%12||12,nm2=String(next.getMinutes()).padStart(2,'0'),ap=next.getHours()>=12?'PM':'AM';
+    $('slotVal').textContent=`${nh}:${nm2} ${ap} (${m}m ${String(s).padStart(2,'0')}s)`;
+    $('slotFill').style.width=pct+'%';
+
+    const curKey=getSlotKey();
+    if(curKey!==lastSlotKey){
+      // Slot nuevo: cerrar el anterior con precio actual
+      if(currentBTC) closeLastSlot(currentBTC);
+      lastSlotKey=curKey;
+      ptbFixed=null;
+      ptbSlotKey=null;
+      if(polyRetryTimer){clearInterval(polyRetryTimer);polyRetryTimer=null;}
+      runFull();
+    }
+  },1000);
+}
+
+// ─── Countdown ───
+let cdTimer=null;
+function startCountdown(total,dir){
+  if(cdTimer)clearInterval(cdTimer);
+  let s=total;const r=22,C=2*Math.PI*r,up=dir==='UP';
+  const draw=()=>{
+    const el=$('cdWrap');if(!el)return;
+    const off=C*(1-Math.max(0,s)/total);
+    el.innerHTML=`<svg class="cd-svg" width="56" height="56" viewBox="0 0 56 56">
+      <circle cx="28" cy="28" r="${r}" fill="none" stroke="#2a2b3a" stroke-width="4"/>
+      <circle cx="28" cy="28" r="${r}" fill="none" stroke="${up?'#00e5a0':'#ff3b5c'}" stroke-width="4"
+        stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}"/>
+      <text x="28" y="28" text-anchor="middle" dominant-baseline="middle"
+        font-family="Syne,sans-serif" font-weight="700" font-size="12" fill="#edeaf3"
+        >${s}</text>
+    </svg><div class="cd-sub">SLOT LEFT</div>`;
+  };
+  draw();cdTimer=setInterval(()=>{if(s>0){s--;draw();}else clearInterval(cdTimer);},1000);
+}
+
+// ─── MAIN ───
+async function runFull(){
+  const btn=$('refreshBtn');
+  btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span> &nbsp;ACTUALIZANDO...';
+  ld('predWrap','Conectando...');
+  ['d1','d2','d3','d4'].forEach(id=>{$(id).className='sdot spin';});
+
+  let btcPrice=null,change24h=0,polyData=null,fg={value:'—',value_classification:'Unknown'};
+
+  // PTB desde Chainlink (mismo que Polymarket)
+  if(!ptbFixed){
+    try{
+      const result = await fetchSlotOpenPrice();
+      if(result && result.price > 0) setPTB(result.price, result.source);
+    }catch(e){}
+  }
+
+  // BTC precio actual — Chainlink (ya llega via WebSocket), fallback Binance
+  try{
+    let price = chainlinkPrice;
+    let src = 'Chainlink';
+    if(!price || price <= 0) {
+      const btc = await fetchBTCBinance();
+      price = btc.usd; change24h = btc.usd_24h_change||0; src = 'Binance';
+    }
+    btcPrice = price; currentBTC = price;
+    $('curVal').textContent = fmt(price);
+    $('curSub').textContent = src + ' — ' + fmtTime();
+    if(!ptbFixed) setPTB(price, src + ' spot');
+    updateDiff();
+    setDS(2, true, `BTC — ${fmt(price)} (${src}) ✓`);
+  }catch(e){setDS(2,false,`BTC — ${e.message}`);}
+
+  // Fear & Greed
+  try{fg=await fetchFG();setDS(3,true,`Fear & Greed — ${fg.value} (${fg.value_classification}) ✓`);}
+  catch(e){setDS(3,false,'Fear & Greed — Error');}
+
+  // Polymarket
+  try{
+    ld('polyWrap','Buscando mercado BTC 5m...');
+    polyData=await fetchPolyBTC5m();
+    renderPoly(polyData);
+    setDS(1,true,`Polymarket — UP ${polyData.upPct}% / DOWN ${polyData.downPct}% ✓`);
+    if(polyRetryTimer){clearInterval(polyRetryTimer);polyRetryTimer=null;}
+  }catch(e){
+    setDS(1,false,`Polymarket — ${e.message}`);
+    $('polyWrap').innerHTML=`<div class="warn">⚠ ${e.message} — reintentando...</div>`;
+    // Reintentar solo Polymarket cada 30s hasta encontrar el mercado
+    if(!polyRetryTimer){
+      polyRetryTimer=setInterval(async()=>{
+        try{
+          const pd=await fetchPolyBTC5m();
+          renderPoly(pd);
+          setDS(1,true,`Polymarket — UP ${pd.upPct}% / DOWN ${pd.downPct}% ✓`);
+          clearInterval(polyRetryTimer);polyRetryTimer=null;
+        }catch(err){
+          setDS(1,false,`Polymarket — ${err.message}`);
+          $('polyWrap').innerHTML=`<div class="warn">⚠ ${err.message} — reintentando...</div>`;
+        }
+      },30000);
+    }
+  }
+
+  // Order Book — consultar después de tener polyData
+  let orderBookData = null;
+  if(polyData?.tokenUp){
+    try{
+      orderBookData = await fetchOrderBookSignal(polyData.tokenUp, polyData.tokenDown);
+      if(orderBookData) console.log('[OB]', orderBookData.desc);
+    }catch(e){}
+  }
+
+  // Claude IA — esperar 90s desde inicio del slot para tener datos intra-slot
+  try{
+    $('d4').className='sdot spin';$('l4').textContent='IA — esperando datos del slot...';
+    const slotAge = Math.floor((Date.now() - getSlotKey()*1000)/1000);
+    const waitTime = Math.max(0, 90 - slotAge); // esperar hasta 90s del slot
+    if(waitTime > 0 && !$('refreshBtn').dataset.forced){
+      ld('predWrap',`Recopilando datos del slot... (${waitTime}s)`);
+      // Mostrar cuenta regresiva
+      let remaining = waitTime;
+      const countInterval = setInterval(()=>{ // ID guardado — se limpia con clearInterval(countInterval)
+        remaining--;
+        if(remaining <= 0){ clearInterval(countInterval); return; }
+        ld('predWrap',`Recopilando datos del slot... (${remaining}s)`);
+        $('l4').textContent=`IA — analizando mercado (${remaining}s)...`;
+      }, 1000);
+      await new Promise(r => setTimeout(r, waitTime * 1000));
+      clearInterval(countInterval);
+    }
+    ld('predWrap','Generando predicción con IA...');
+    $('l4').textContent='IA — generando predicción...';
+    const pred=await askClaude(btcPrice,change24h,polyData,fg,orderBookData);
+
+    // Sanity check: solo actuar si el gap es REALMENTE imposible Y Polymarket no dice lo contrario
+    const secsLeft2=Math.max(0,Math.floor((getNextSlotMs()-Date.now())/1000));
+    const gap2=btcPrice&&ptbFixed?btcPrice-ptbFixed:0;
+    const gapPct2=ptbFixed?Math.abs(gap2/ptbFixed*100):0;
+    const polyUp2=parseFloat(polyData?.upPct||50);
+    // Solo forzar DOWN si: gap negativo grande + poco tiempo + Polymarket también dice DOWN
+    const impossibleGap = secsLeft2<60&&gapPct2>0.25 || secsLeft2<30&&gapPct2>0.12 || secsLeft2<15&&gapPct2>0.05;
+    const crowdAlsoDn = polyUp2 < 45; // Polymarket también bajista
+    if(gap2<0 && impossibleGap && crowdAlsoDn){
+      console.warn('[SANITY] Gap imposible + crowd bearish → DOWN');
+      pred.direction='DOWN';
+      pred.confidence=Math.min(pred.confidence||65,85);
+    }
+
+    renderPred(pred);
+    renderSent(pred,fg);
+    addPrediction(pred,ptbFixed,btcPrice,polyData);
+    if(pred && pred.direction !== 'NEUTRAL' && pred.confidence >= 65){
+      fetch('https://omega-production-d6f1.up.railway.app/trade', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          direction: pred.direction,
+          confidence: pred.confidence,
+          signal_quality: pred.signalQuality,
+          token_up: polyData?.tokenUp || null,
+          token_down: polyData?.tokenDown || null,
+          bankroll: parseFloat(document.getElementById('brInput')?.value || '50'),
+          hour: new Date().getHours()
+        })
+      })
+      .then(r => r.json())
+      .then(result => {
+        if(result.executed){
+          console.log('✅ Trade ejecutado:', result.trade);
+        } else {
+          console.log('⏭️ Trade omitido:', result.reason);
+        }
+      })
+      .catch(e => console.error('Trade error:', e));
+    }
+    setDS(4,true,'IA (Claude) — ✓');
+  }catch(e){
+    console.error('[askClaude] Error IA:', e.message);
+    setDS(4,false,`IA — ${e.message}`);
+    $('predWrap').innerHTML=`<div class="err">⚠ Error IA: ${e.message}</div>`;
+  }
+
+  btn.disabled=false;btn.innerHTML='⟳ &nbsp;ACTUALIZAR PREDICCIÓN';
+}
+
+// Fallback: si RTDS no actualiza en 15s, usar Binance
+const btcFallbackInterval = setInterval(async()=>{
+  // El precio ya se actualiza via rtdsWs.onmessage en tiempo real
+  // Este intervalo solo es fallback si el WebSocket no está conectado
+  if (!rtdsWs || rtdsWs.readyState !== WebSocket.OPEN) {
+    try{
+      const btc = await fetchBTCBinance();
+      currentBTC = btc.usd;
+      $('curVal').textContent = fmt(btc.usd);
+      $('curSub').textContent = 'Binance (fallback) — ' + fmtTime();
+      updateDiff();
+    }catch(e){}
+  }
+},15000);
+
+// Init
+connectRTDS(); // Conectar WebSocket Chainlink inmediatamente
+renderHistory();
+startSlotTimer();
+runFull();
+renderAdvancedStats();
+
+// ── BANKROLL MANAGER ──
+let currentRisk = 'normal';
+const RISK_PCT = { conservative: 0.02, normal: 0.04, aggressive: 0.06 };
+const RISK_LABELS = { conservative: '2%', normal: '4%', aggressive: '6%' };
+
+function getHourMultiplier(){
+  // Calcula multiplicador basado en WR histórico de la hora actual
+  const m = loadMemory();
+  const hour = new Date().getHours();
+  if(!m.hourStats || !m.hourStats[hour]) return { mult: 1.0, wr: null, slots: 0 };
+  const h = m.hourStats[hour];
+  const total = h.wins + h.losses;
+  if(total < 3) return { mult: 1.0, wr: null, slots: total };
+  const wr = h.wins / total;
+  // Multiplicador: 83% WR → 1.3x, 67% WR → 0.8x, 50% WR → 0.5x
+  const mult = wr >= 0.80 ? 1.3 : wr >= 0.72 ? 1.1 : wr >= 0.60 ? 1.0 : wr >= 0.50 ? 0.8 : 0.6;
+  return { mult, wr: Math.round(wr*100), slots: total };
+}
+
+// Función global — el automatizador la llamará para saber cuánto apostar
+window.getBetAmount = function(){
+  const bankroll = parseFloat(document.getElementById('brBankroll').value) || 200;
+  const basePct = RISK_PCT[currentRisk] || 0.04;
+  const { mult, wr, slots } = getHourMultiplier();
+  const amount = bankroll * basePct * mult;
+  return {
+    amount: Math.max(1, Math.round(amount * 100) / 100),
+    bankroll,
+    risk: currentRisk,
+    basePct,
+    mult,
+    hourWR: wr,
+    hourSlots: slots
+  };
+};
+
+function setRisk(risk){
+  currentRisk = risk;
+  ['conservative','normal','aggressive'].forEach(r => {
+    const btn = document.getElementById('risk'+r.charAt(0).toUpperCase()+r.slice(1));
+    btn.className = 'risk-btn ' + r + (r === risk ? ' active' : '');
+  });
+  updateBetDisplay();
+  // Guardar preferencia
+  try{ localStorage.setItem('omega_risk', risk); }catch(e){}
+}
+
+function updateBetDisplay(){
+  const bet = window.getBetAmount();
+  document.getElementById('brBetAmount').textContent = '$' + bet.amount.toFixed(2);
+  document.getElementById('brBetPct').textContent = (bet.basePct * bet.mult * 100).toFixed(1) + '%';
+
+  const multText = bet.mult !== 1.0 ? ` × ${bet.mult}x` : '';
+  const hourText = bet.hourWR ? `(${bet.hourWR}% WR esta hora, ${bet.hourSlots} slots)` : '(hora sin datos)';
+  document.getElementById('brBetReason').textContent =
+    `${RISK_LABELS[bet.risk]} × $${bet.bankroll}${multText} ${hourText}`;
+  document.getElementById('brHourWR').textContent =
+    bet.hourWR ? `Esta hora: ${bet.hourWR}% WR` : 'Esta hora: sin datos';
+
+  // Warning si apuesta > 8% del bankroll
+  const warning = document.getElementById('brWarning');
+  const pct = bet.amount / bet.bankroll;
+  if(pct > 0.08){
+    warning.style.display = 'block';
+    warning.textContent = `⚠ Apuesta alta (${(pct*100).toFixed(1)}% del bankroll). Considera reducir el riesgo o aumentar el capital.`;
+  } else {
+    warning.style.display = 'none';
+  }
+}
+
+// Cargar preferencia guardada
+try{
+  const saved = localStorage.getItem('omega_risk');
+  if(saved) setRisk(saved);
+}catch(e){}
+updateBetDisplay();
+
+// Actualizar cuando cambia el slot (WR por hora puede cambiar)
+const _origCloseSlot = closeLastSlot;
+</script>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+// ── Lightweight Charts (TradingView) — igual que Polymarket ──
+let lwChart = null;
+let lwLineSeries = null;
+let lwCandleSeries = null;
+let lwPtbLine = null;
+let chartMode = 'line';
+let chartPrices = []; // {time (unix seconds), value}
+let candleBuckets = {}; // keyed by 30s bucket
+
+function setChartMode(mode){
+  chartMode = mode;
+  document.getElementById('btnLine').className = 'chart-btn' + (mode==='line'?' active':'');
+  document.getElementById('btnCandle').className = 'chart-btn' + (mode==='candle'?' active':'');
+  if(!lwChart) return;
+  if(mode === 'line'){
+    if(lwCandleSeries){ lwChart.removeSeries(lwCandleSeries); lwCandleSeries = null; }
+    if(!lwLineSeries) lwLineSeries = createLineSeries();
+    syncLineSeries();
+  } else {
+    if(lwLineSeries){ lwChart.removeSeries(lwLineSeries); lwLineSeries = null; }
+    if(!lwCandleSeries) lwCandleSeries = createCandleSeries();
+    syncCandleSeries();
+  }
+}
+
+function createLineSeries(){
+  const s = lwChart.addAreaSeries({
+    lineColor: '#f0b90b',
+    lineWidth: 3,
+    topColor: 'rgba(240,185,11,0.25)',
+    bottomColor: 'rgba(240,185,11,0.0)',
+    crosshairMarkerVisible: true,
+    crosshairMarkerRadius: 5,
+    crosshairMarkerBorderColor: '#f0b90b',
+    crosshairMarkerBackgroundColor: '#1a1b1e',
+    lastValueVisible: true,
+    priceLineVisible: false,
+  });
+  return s;
+}
+
+function createCandleSeries(){
+  const s = lwChart.addCandlestickSeries({
+    upColor: '#26a69a',
+    downColor: '#ef5350',
+    borderUpColor: '#2ec4b6',
+    borderDownColor: '#ff4d6d',
+    wickUpColor: '#2ec4b6',
+    wickDownColor: '#ff4d6d',
+    borderVisible: true,
+    wickVisible: true,
+  });
+  return s;
+}
+
+function syncLineSeries(){
+  if(!lwLineSeries || chartPrices.length === 0) return;
+  lwLineSeries.setData(chartPrices);
+  updatePtbLine();
+}
+
+function syncCandleSeries(){
+  if(!lwCandleSeries) return;
+  const candles = Object.values(candleBuckets)
+    .sort((a,b) => a.time - b.time)
+    .map(c => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
+  if(candles.length > 0) lwCandleSeries.setData(candles);
+  updatePtbLine();
+}
+
+let lwPtbFixed = null; // track cuando realmente cambió el PTB
+function updatePtbLine(){
+  if(!lwChart || !ptbFixed) return;
+  // Solo recrear si el PTB cambió
+  if(lwPtbFixed === ptbFixed && lwPtbLine) return;
+  lwPtbFixed = ptbFixed;
+  const series = lwLineSeries || lwCandleSeries;
+  if(!series) return;
+  if(lwPtbLine){ try{ series.removePriceLine(lwPtbLine); }catch(e){} lwPtbLine = null; }
+  lwPtbLine = series.createPriceLine({
+    price: ptbFixed,
+    color: 'rgba(239,83,80,0.85)',
+    lineWidth: 2,
+    lineStyle: LightweightCharts.LineStyle.Dashed,
+    axisLabelVisible: true,
+    title: ' PTB ',
+    axisLabelColor: '#ef5350',
+    axisLabelTextColor: '#ffffff',
+  });
+}
+
+function initChart(){
+  const container = document.getElementById('chartContainer');
+  if(!container || lwChart) return;
+
+  // Fijar dimensiones antes de crear el chart
+  const W = container.clientWidth || 300;
+  const H = Math.max(container.clientHeight, 220);
+
+  lwChart = LightweightCharts.createChart(container, {
+    width: W,
+    height: H,
+    layout: {
+      background: { type: 'solid', color: 'transparent' },
+      textColor: '#8a9bb5',
+      fontSize: 11,
+      fontFamily: "'JetBrains Mono', monospace",
+    },
+    grid: {
+      vertLines: { color: 'rgba(255,255,255,0.04)' },
+      horzLines: { color: 'rgba(255,255,255,0.04)' },
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Magnet,
+      vertLine: { color: 'rgba(240,185,11,0.4)', width: 1, style: 1, labelBackgroundColor: '#f0b90b' },
+      horzLine: { color: 'rgba(240,185,11,0.4)', width: 1, style: 1, labelBackgroundColor: '#f0b90b' },
+    },
+    rightPriceScale: {
+      borderVisible: false,
+      textColor: '#8a9bb5',
+      scaleMargins: { top: 0.1, bottom: 0.1 },
+    },
+    timeScale: {
+      borderVisible: false,
+      textColor: '#8a9bb5',
+      timeVisible: true,
+      secondsVisible: true,
+      fixLeftEdge: false,
+      fixRightEdge: true,
+      tickMarkFormatter: (time) => {
+        const d = new Date(time * 1000);
+        const h = d.getHours().toString().padStart(2,'0');
+        const m = d.getMinutes().toString().padStart(2,'0');
+        return h + ':' + m;
+      },
+    },
+    handleScroll: true,
+    handleScale: true,
+  });
+
+  // Auto-resize con debounce para evitar lag
+  let resizeTimer = null;
+  const ro = new ResizeObserver(() => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if(lwChart && container.clientWidth > 0){
+        lwChart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+      }
+    }, 100);
+  });
+  ro.observe(container);
+
+  lwLineSeries = createLineSeries();
+}
+
+let lastChartSec = 0;
+let lastChartUpdate = 0; // timestamp ms del último render
+
+function addChartPrice(price){
+  const nowMs = Date.now();
+  let nowSec = Math.floor(nowMs / 1000);
+  if(nowSec <= lastChartSec) nowSec = lastChartSec + 1;
+  lastChartSec = nowSec;
+
+  // Throttle: actualizar gráfico máx cada 1 segundo
+  const shouldRender = (nowMs - lastChartUpdate) >= 1000;
+  if(shouldRender) lastChartUpdate = nowMs;
+
+  // Guardar punto solo si pasó suficiente tiempo
+  const lastEntry = chartPrices[chartPrices.length - 1];
+  const shouldAdd = !lastEntry || (nowSec - lastEntry.time) >= 2;
+  if(shouldAdd){
+    chartPrices.push({ time: nowSec, value: price });
+    if(chartPrices.length > 200) chartPrices.shift();
+  }
+
+  // Actualizar bucket de velas (30s)
+  const bucketKey = Math.floor(nowSec / 30) * 30;
+  if(!candleBuckets[bucketKey]){
+    candleBuckets[bucketKey] = { time: bucketKey, open: price, high: price, low: price, close: price };
+  } else {
+    candleBuckets[bucketKey].high = Math.max(candleBuckets[bucketKey].high, price);
+    candleBuckets[bucketKey].low  = Math.min(candleBuckets[bucketKey].low,  price);
+    candleBuckets[bucketKey].close = price;
+  }
+  const keys = Object.keys(candleBuckets).map(Number).sort((a,b)=>b-a);
+  keys.slice(100).forEach(k => delete candleBuckets[k]);
+
+  if(!lwChart){ initChart(); return; }
+
+  if(!shouldRender) return; // throttle — no renderizar cada mensaje WS
+
+  if(chartMode === 'line' && lwLineSeries && shouldAdd){
+    try {
+      lwLineSeries.update({ time: nowSec, value: price });
+    } catch(e) {
+      lwChart.removeSeries(lwLineSeries);
+      lwLineSeries = createLineSeries();
+      if(chartPrices.length > 0) lwLineSeries.setData(chartPrices);
+    }
+    updatePtbLine();
+  } else if(chartMode === 'candle' && lwCandleSeries && shouldRender){
+    try {
+      const c = candleBuckets[bucketKey];
+      lwCandleSeries.update({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close });
+    } catch(e) {
+      lwChart.removeSeries(lwCandleSeries);
+      lwCandleSeries = createCandleSeries();
+      syncCandleSeries();
+    }
+    updatePtbLine();
+  }
+}
+
+// Init chart cuando DOM esté listo
+setTimeout(initChart, 800);
+</script>
+</body>
+</html>
