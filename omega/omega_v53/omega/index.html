@@ -1672,13 +1672,61 @@ async function askClaude(btcPrice,change24h,polyData,fg,orderBook){
   if(strongBullTrend) upThreshold = Math.min(upThreshold, 46);
   if(veryStrongBullTrend) upThreshold = Math.min(upThreshold, 40);
 
+  // ── Detector de tendencia fuerte — override anti-bias ──────────────────────
+  // Si el precio lleva subiendo/bajando más de $200 en los últimos 4 slots,
+  // forzar esa dirección independientemente del momentum
+  function getStrongTrendOverride(){
+    try {
+      const hist = loadHist().filter(h => h.priceAtClose && h.ptb && h.result !== 'PENDING');
+      if(hist.length < 3) return null;
+
+      // ── Calcular umbral dinámico basado en volatilidad reciente ──
+      // Promedio del movimiento absoluto por slot en las últimas 2 horas (24 slots)
+      const last24 = hist.slice(0, 24);
+      const avgAbsMove = last24.reduce((s,h) => s + Math.abs(h.priceAtClose - h.ptb), 0) / last24.length;
+      // Umbral = 1.5x el movimiento promedio por slot, mínimo $40, máximo $150
+      const dynThreshold = Math.max(40, Math.min(150, avgAbsMove * 1.5));
+
+      // ── Detectar tendencia en últimos 8 slots ──
+      const last8 = hist.slice(0, 8);
+      const oldest8 = last8[last8.length - 1].ptb;
+      const newest8 = last8[0].priceAtClose;
+      const move8 = newest8 - oldest8;
+
+      // ── Detectar consistencia direccional ──
+      // Si 5+ de los últimos 6 slots van en la misma dirección = tendencia fuerte
+      const last6 = hist.slice(0, 6);
+      const upSlots = last6.filter(h => h.priceAtClose >= h.ptb).length;
+      const downSlots = last6.length - upSlots;
+      const strongUp = upSlots >= 5;
+      const strongDown = downSlots >= 5;
+
+      // Override por tendencia en 8 slots
+      if(move8 > dynThreshold * 2) return { dir: 'UP', move: move8, reason: `tendencia alcista +$${move8.toFixed(0)} en 8 slots (umbral dinámico: $${dynThreshold.toFixed(0)})` };
+      if(move8 < -dynThreshold * 2) return { dir: 'DOWN', move: move8, reason: `tendencia bajista -$${Math.abs(move8).toFixed(0)} en 8 slots` };
+
+      // Override por consistencia direccional
+      if(strongUp && move8 > dynThreshold) return { dir: 'UP', move: move8, reason: `${upSlots}/6 slots alcistas + tendencia +$${move8.toFixed(0)}` };
+      if(strongDown && move8 < -dynThreshold) return { dir: 'DOWN', move: move8, reason: `${downSlots}/6 slots bajistas + tendencia -$${Math.abs(move8).toFixed(0)}` };
+
+      // Override por gap actual vs PTB
+      if(btcPrice && ptb){
+        const curMove = btcPrice - ptb;
+        if(curMove > dynThreshold) return { dir: 'UP', move: curMove, reason: `precio actual +$${curMove.toFixed(0)} sobre PTB (umbral: $${dynThreshold.toFixed(0)})` };
+        if(curMove < -dynThreshold) return { dir: 'DOWN', move: curMove, reason: `precio actual -$${Math.abs(curMove).toFixed(0)} bajo PTB` };
+      }
+    } catch(e) {}
+    return null;
+  }
+  const trendOverride = getStrongTrendOverride();
+
   // 4. Zona NEUTRAL — score ambiguo sin tendencia clara
   const weakBearTrend = macroPriceTrend.trend === -1;
   const neutralZone = (!strongBearTrend && !strongBullTrend && bullPct >= 47 && bullPct <= 57) ||
                       (weakBearTrend && bullPct >= 50 && bullPct <= 62) ||
                       (hCfg.label === 'débil' && bullPct >= 48 && bullPct <= 60);
 
-  const direction = bullPct >= upThreshold ? 'UP' : 'DOWN';
+  const direction = trendOverride ? trendOverride.dir : (bullPct >= upThreshold ? 'UP' : 'DOWN');
   const baseConf = Math.round(50 + Math.abs(bullPct - upThreshold) * 0.9);
   const rawConf = Math.round(Math.min(95, Math.max(35, baseConf)) * volPenalty * lateralPenalty * volumePenalty);
   // Aplicar boost/penalización horaria
@@ -1751,6 +1799,8 @@ MOMENTUM RECIENTE (últimos slots cerrados):
 POLYMARKET: UP ${upPct}% / DOWN ${downPct}% (señal secundaria, muchas veces rezagada)
 
 SCORE CALCULADO: bullish ${bullPts.toFixed(1)} vs bearish ${bearPts.toFixed(1)} → ${direction} ${confidence}%
+WR RECIENTE (últimos 20 slots): ${dw.recentWR}% — pesos ajustados dinámicamente
+${trendOverride ? `⚠️ OVERRIDE ACTIVO: ${trendOverride.reason} → forzando ${trendOverride.dir}` : 'Sin override de tendencia'}
 
 REGLAS:
 - Si el momentum de los últimos 3+ slots es consistentemente bajista, DOWN tiene prioridad
