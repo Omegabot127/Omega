@@ -1678,13 +1678,13 @@ async function askClaude(btcPrice,change24h,polyData,fg,orderBook){
   function getStrongTrendOverride(){
     try {
       const hist = loadHist().filter(h => h.priceAtClose && h.ptb && h.result !== 'PENDING');
-      const last4 = hist.slice(0, 4);
+      const last4 = hist.slice(0, 8);
       if(last4.length < 3) return null;
       const oldest = last4[last4.length - 1].ptb;
       const newest = last4[0].priceAtClose;
       const move = newest - oldest;
-      if(move > 200) return { dir: 'UP', move, reason: `tendencia alcista fuerte +$${move.toFixed(0)} en ${last4.length} slots` };
-      if(move < -200) return { dir: 'DOWN', move, reason: `tendencia bajista fuerte -$${Math.abs(move).toFixed(0)} en ${last4.length} slots` };
+      if(move > 80) return { dir: 'UP', move, reason: `tendencia alcista fuerte +$${move.toFixed(0)} en ${last4.length} slots` };
+      if(move < -80) return { dir: 'DOWN', move, reason: `tendencia bajista fuerte -$${Math.abs(move).toFixed(0)} en ${last4.length} slots` };
       // También detectar si el precio actual está muy por encima/debajo del PTB
       if(btcPrice && ptb){
         const curMove = btcPrice - ptb;
