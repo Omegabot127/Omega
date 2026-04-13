@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -1673,13 +1672,37 @@ async function askClaude(btcPrice,change24h,polyData,fg,orderBook){
   if(strongBullTrend) upThreshold = Math.min(upThreshold, 46);
   if(veryStrongBullTrend) upThreshold = Math.min(upThreshold, 40);
 
+  // ── Detector de tendencia fuerte — override anti-bias ──────────────────────
+  // Si el precio lleva subiendo/bajando más de $200 en los últimos 4 slots,
+  // forzar esa dirección independientemente del momentum
+  function getStrongTrendOverride(){
+    try {
+      const hist = loadHist().filter(h => h.priceAtClose && h.ptb && h.result !== 'PENDING');
+      const last4 = hist.slice(0, 4);
+      if(last4.length < 3) return null;
+      const oldest = last4[last4.length - 1].ptb;
+      const newest = last4[0].priceAtClose;
+      const move = newest - oldest;
+      if(move > 200) return { dir: 'UP', move, reason: `tendencia alcista fuerte +$${move.toFixed(0)} en ${last4.length} slots` };
+      if(move < -200) return { dir: 'DOWN', move, reason: `tendencia bajista fuerte -$${Math.abs(move).toFixed(0)} en ${last4.length} slots` };
+      // También detectar si el precio actual está muy por encima/debajo del PTB
+      if(btcPrice && ptb){
+        const curMove = btcPrice - ptb;
+        if(curMove > 150) return { dir: 'UP', move: curMove, reason: `precio actual +$${curMove.toFixed(0)} sobre PTB` };
+        if(curMove < -150) return { dir: 'DOWN', move: curMove, reason: `precio actual -$${Math.abs(curMove).toFixed(0)} bajo PTB` };
+      }
+    } catch(e) {}
+    return null;
+  }
+  const trendOverride = getStrongTrendOverride();
+
   // 4. Zona NEUTRAL — score ambiguo sin tendencia clara
   const weakBearTrend = macroPriceTrend.trend === -1;
   const neutralZone = (!strongBearTrend && !strongBullTrend && bullPct >= 47 && bullPct <= 57) ||
                       (weakBearTrend && bullPct >= 50 && bullPct <= 62) ||
                       (hCfg.label === 'débil' && bullPct >= 48 && bullPct <= 60);
 
-  const direction = bullPct >= upThreshold ? 'UP' : 'DOWN';
+  const direction = trendOverride ? trendOverride.dir : (bullPct >= upThreshold ? 'UP' : 'DOWN');
   const baseConf = Math.round(50 + Math.abs(bullPct - upThreshold) * 0.9);
   const rawConf = Math.round(Math.min(95, Math.max(35, baseConf)) * volPenalty * lateralPenalty * volumePenalty);
   // Aplicar boost/penalización horaria
@@ -1752,6 +1775,8 @@ MOMENTUM RECIENTE (últimos slots cerrados):
 POLYMARKET: UP ${upPct}% / DOWN ${downPct}% (señal secundaria, muchas veces rezagada)
 
 SCORE CALCULADO: bullish ${bullPts.toFixed(1)} vs bearish ${bearPts.toFixed(1)} → ${direction} ${confidence}%
+WR RECIENTE (últimos 20 slots): ${dw.recentWR}% — pesos ajustados dinámicamente
+${trendOverride ? `⚠️ OVERRIDE ACTIVO: ${trendOverride.reason} → forzando ${trendOverride.dir}` : 'Sin override de tendencia'}
 
 REGLAS:
 - Si el momentum de los últimos 3+ slots es consistentemente bajista, DOWN tiene prioridad
@@ -1761,7 +1786,7 @@ REGLAS:
 Responde SOLO con JSON sin markdown:
 {"direction":"${neutralZone ? 'NEUTRAL' : direction}","confidence":${confidence},"signalQuality":"${signalQuality}","neutralZone":${neutralZone},"hourBadge":"${hourBadgeLabel}","hourColor":"${hourBadgeColor}","ptbPrice":${Math.round(ptb)},"gap":${diff.toFixed(2)},"bullScore":${bullPts.toFixed(1)},"bearScore":${bearPts.toFixed(1)},"lstmDir":"${direction}","lstmPct":${bullPct.toFixed(1)},"techDir":"${direction}","techPct":${bullPct.toFixed(1)},"hybridDir":"${direction}","hybridPct":${bullPct.toFixed(1)},"pattern":null,"signals":[{"name":"Momentum slots","value":"${mom.upCount}↑ ${mom.downCount}↓","score":${Math.min(5,Math.abs(mom.trend)*1.5).toFixed(2)},"bullish":${mom.trend>=0}},{"name":"Gap vs PTB","value":"${diff>=0?'+':''}${diff.toFixed(0)}","score":${gapScore.toFixed(2)},"bullish":${diff>=0}},{"name":"Gap promedio","value":"${avgGapNum>=0?'+':''}${avgGapNum}","score":${Math.min(5,Math.abs(avgGapNum)/20).toFixed(2)},"bullish":${avgGapNum>=0}},{"name":"Polymarket","value":"UP ${upPct}%","score":${(polyEdge*2).toFixed(2)},"bullish":${upPct>=50}},{"name":"Fear & Greed","value":"${fearIdx}/100","score":${(Math.abs(fearIdx-50)/20).toFixed(2)},"bullish":${fearIdx<50}}],"sentiment":"${fearIdx<35?'Fear':fearIdx>65?'Greed':'Neutral'}","fundingRate":"0.0000%","exchangeFlow":"NEUTRAL","whaleActivity":"LOW","analysis":"2 oraciones en español: explica la predicción ${neutralZone?'NEUTRAL (no apostar)':direction} basándote principalmente en el momentum (${mom.desc}) y el gap actual de ${diff.toFixed(0)} con ${secsLeft}s restantes."}`;
 
-  const res=await fetch('https://omega-production-d6f1.up.railway.app/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt}),signal:AbortSignal.timeout(25000)});
+  const res=await fetch('https://omegabtc.site/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt}),signal:AbortSignal.timeout(15000)});
   if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error||`Error ${res.status}`);}
   const data=await res.json();
   if(data.error)throw new Error(data.error);
