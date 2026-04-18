@@ -1678,18 +1678,42 @@ async function askClaude(btcPrice,change24h,polyData,fg,orderBook){
   function getStrongTrendOverride(){
     try {
       const hist = loadHist().filter(h => h.priceAtClose && h.ptb && h.result !== 'PENDING');
-      const last4 = hist.slice(0, 8);
-      if(last4.length < 3) return null;
-      const oldest = last4[last4.length - 1].ptb;
-      const newest = last4[0].priceAtClose;
-      const move = newest - oldest;
-      if(move > 80) return { dir: 'UP', move, reason: `tendencia alcista fuerte +$${move.toFixed(0)} en ${last4.length} slots` };
-      if(move < -80) return { dir: 'DOWN', move, reason: `tendencia bajista fuerte -$${Math.abs(move).toFixed(0)} en ${last4.length} slots` };
-      // También detectar si el precio actual está muy por encima/debajo del PTB
+      if(hist.length < 3) return null;
+
+      // ── Calcular umbral dinámico basado en volatilidad reciente ──
+      // Promedio del movimiento absoluto por slot en las últimas 2 horas (24 slots)
+      const last24 = hist.slice(0, 24);
+      const avgAbsMove = last24.reduce((s,h) => s + Math.abs(h.priceAtClose - h.ptb), 0) / last24.length;
+      // Umbral = 1.5x el movimiento promedio por slot, mínimo $40, máximo $150
+      const dynThreshold = Math.max(40, Math.min(150, avgAbsMove * 1.5));
+
+      // ── Detectar tendencia en últimos 8 slots ──
+      const last8 = hist.slice(0, 8);
+      const oldest8 = last8[last8.length - 1].ptb;
+      const newest8 = last8[0].priceAtClose;
+      const move8 = newest8 - oldest8;
+
+      // ── Detectar consistencia direccional ──
+      // Si 5+ de los últimos 6 slots van en la misma dirección = tendencia fuerte
+      const last6 = hist.slice(0, 6);
+      const upSlots = last6.filter(h => h.priceAtClose >= h.ptb).length;
+      const downSlots = last6.length - upSlots;
+      const strongUp = upSlots >= 5;
+      const strongDown = downSlots >= 5;
+
+      // Override por tendencia en 8 slots
+      if(move8 > dynThreshold * 2) return { dir: 'UP', move: move8, reason: `tendencia alcista +$${move8.toFixed(0)} en 8 slots (umbral dinámico: $${dynThreshold.toFixed(0)})` };
+      if(move8 < -dynThreshold * 2) return { dir: 'DOWN', move: move8, reason: `tendencia bajista -$${Math.abs(move8).toFixed(0)} en 8 slots` };
+
+      // Override por consistencia direccional
+      if(strongUp && move8 > dynThreshold) return { dir: 'UP', move: move8, reason: `${upSlots}/6 slots alcistas + tendencia +$${move8.toFixed(0)}` };
+      if(strongDown && move8 < -dynThreshold) return { dir: 'DOWN', move: move8, reason: `${downSlots}/6 slots bajistas + tendencia -$${Math.abs(move8).toFixed(0)}` };
+
+      // Override por gap actual vs PTB
       if(btcPrice && ptb){
         const curMove = btcPrice - ptb;
-        if(curMove > 150) return { dir: 'UP', move: curMove, reason: `precio actual +$${curMove.toFixed(0)} sobre PTB` };
-        if(curMove < -150) return { dir: 'DOWN', move: curMove, reason: `precio actual -$${Math.abs(curMove).toFixed(0)} bajo PTB` };
+        if(curMove > dynThreshold) return { dir: 'UP', move: curMove, reason: `precio actual +$${curMove.toFixed(0)} sobre PTB (umbral: $${dynThreshold.toFixed(0)})` };
+        if(curMove < -dynThreshold) return { dir: 'DOWN', move: curMove, reason: `precio actual -$${Math.abs(curMove).toFixed(0)} bajo PTB` };
       }
     } catch(e) {}
     return null;
@@ -1786,7 +1810,7 @@ REGLAS:
 Responde SOLO con JSON sin markdown:
 {"direction":"${neutralZone ? 'NEUTRAL' : direction}","confidence":${confidence},"signalQuality":"${signalQuality}","neutralZone":${neutralZone},"hourBadge":"${hourBadgeLabel}","hourColor":"${hourBadgeColor}","ptbPrice":${Math.round(ptb)},"gap":${diff.toFixed(2)},"bullScore":${bullPts.toFixed(1)},"bearScore":${bearPts.toFixed(1)},"lstmDir":"${direction}","lstmPct":${bullPct.toFixed(1)},"techDir":"${direction}","techPct":${bullPct.toFixed(1)},"hybridDir":"${direction}","hybridPct":${bullPct.toFixed(1)},"pattern":null,"signals":[{"name":"Momentum slots","value":"${mom.upCount}↑ ${mom.downCount}↓","score":${Math.min(5,Math.abs(mom.trend)*1.5).toFixed(2)},"bullish":${mom.trend>=0}},{"name":"Gap vs PTB","value":"${diff>=0?'+':''}${diff.toFixed(0)}","score":${gapScore.toFixed(2)},"bullish":${diff>=0}},{"name":"Gap promedio","value":"${avgGapNum>=0?'+':''}${avgGapNum}","score":${Math.min(5,Math.abs(avgGapNum)/20).toFixed(2)},"bullish":${avgGapNum>=0}},{"name":"Polymarket","value":"UP ${upPct}%","score":${(polyEdge*2).toFixed(2)},"bullish":${upPct>=50}},{"name":"Fear & Greed","value":"${fearIdx}/100","score":${(Math.abs(fearIdx-50)/20).toFixed(2)},"bullish":${fearIdx<50}}],"sentiment":"${fearIdx<35?'Fear':fearIdx>65?'Greed':'Neutral'}","fundingRate":"0.0000%","exchangeFlow":"NEUTRAL","whaleActivity":"LOW","analysis":"2 oraciones en español: explica la predicción ${neutralZone?'NEUTRAL (no apostar)':direction} basándote principalmente en el momentum (${mom.desc}) y el gap actual de ${diff.toFixed(0)} con ${secsLeft}s restantes."}`;
 
-  const res=await fetch('https://omega-production-d6f1.up.railway.app/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt}),signal:AbortSignal.timeout(35000)});
+  const res=await fetch('https://omegabtc.site/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt}),signal:AbortSignal.timeout(15000)});
   if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error||`Error ${res.status}`);}
   const data=await res.json();
   if(data.error)throw new Error(data.error);
