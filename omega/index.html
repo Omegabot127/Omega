@@ -1355,12 +1355,12 @@ function getMacroPriceTrend(){
       prices[i] >= prices[i-1] ? ups++ : downs++;
     }
 
-    // Tendencia fuerte: >$80 total en 6 slots (bajado de $150)
-    const strongBull = totalMove > 80;
-    const strongBear = totalMove < -80;
-    // Tendencia moderada: >$30 (bajado de $60)
-    const modBull = totalMove > 30;
-    const modBear = totalMove < -30;
+    // Tendencia fuerte: >$60 total en 6 slots (bajado de $80)
+    const strongBull = totalMove > 60;
+    const strongBear = totalMove < -60;
+    // Tendencia moderada: >$20 (bajado de $30)
+    const modBull = totalMove > 20;
+    const modBear = totalMove < -20;
 
     // Consistencia direccional: si 4+ de 5 slots van en la misma dirección
     const bearConsistent = downs >= 4;
@@ -1441,7 +1441,7 @@ function getIntraSlotMomentum(){
 
   // Señal combinada — más peso a lo reciente
   const signal = slope30 * 3 + slope60 * 2 + slope120 * 1;
-  const trend = signal > 5 ? 1 : signal < -5 ? -1 : 0;
+  const trend = signal > 3 ? 1 : signal < -3 ? -1 : 0;
 
   return {
     trend,
@@ -1567,9 +1567,9 @@ async function askClaude(btcPrice,change24h,polyData,fg,orderBook){
   if(mom.trend > 0) bullPts += Math.min(dw.mom, mom.trend * 1.2);
   else if(mom.trend < 0) bearPts += Math.min(dw.mom, Math.abs(mom.trend) * 1.2);
 
-  // 3. Gap actual vs PTB ajustado por tiempo (peso 2)
-  const timeWeight = secsLeft > 180 ? 0.5 : secsLeft > 120 ? 1 : secsLeft > 60 ? 2 : 3.5;
-  const gapScore = Math.min(dw.gap, Math.abs(pct) * 20 * (timeWeight/4));
+  // 3. Gap actual vs PTB — señal más directa del mercado (peso aumentado)
+  const timeWeight = secsLeft > 180 ? 1.0 : secsLeft > 120 ? 1.5 : secsLeft > 60 ? 2.5 : 4.0;
+  const gapScore = Math.min(4, Math.abs(pct) * 30 * (timeWeight/4));
   if(diff > 0) bullPts += gapScore; else bearPts += gapScore;
 
   // 4. Promedio gap reciente (peso 1.5)
