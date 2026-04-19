@@ -961,7 +961,6 @@ async function fetchBTCBinance(){
 // wss://ws-live-data.polymarket.com — sin autenticación, mismo precio que Polymarket
 let chainlinkPrice = null;
 let priceHistory = []; // {price, ts} ultimos 2 minutos
-let predictionScheduled = false; // evitar predicciones duplicadas
 let chainlinkTs = null;
 let rtdsWs = null;
 
@@ -1067,16 +1066,6 @@ function waitChainlinkPrice(maxMs = 5000) {
   });
 }
 
-// Fallback: Binance
-async function fetchBTCBinance(){
-  try{const d=await safeFetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');if(d?.price)return{usd:parseFloat(d.price),usd_24h_change:0};}
-  catch(e){console.warn('[fetchBTC] Binance falló:', e.message);}
-  try{
-    const d=await safeFetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true');
-    if(!d?.bitcoin) throw new Error('CoinGecko respuesta inválida');
-    return d.bitcoin;
-  }catch(e){console.error('[fetchBTC] CoinGecko también falló:', e.message); throw e;}
-}
 
 // PTB = precio Chainlink al inicio del slot
 async function fetchSlotOpenPrice(){
@@ -1356,11 +1345,9 @@ function getMacroPriceTrend(){
       prices[i] >= prices[i-1] ? ups++ : downs++;
     }
 
-    // Tendencia fuerte: >0.12% del precio en 6 slots (proporcional a precio BTC)
     const priceRef = prices[prices.length-1] || 50000;
-    const strongThresh = priceRef * 0.0012; // 0.12% = ~$90 a $75k
-    const modThresh    = priceRef * 0.0004; // 0.04% = ~$30 a $75k
-
+    const strongThresh = priceRef * 0.0012;
+    const modThresh    = priceRef * 0.0004;
     const strongBull = totalMove > strongThresh;
     const strongBear = totalMove < -strongThresh;
     const modBull = totalMove > modThresh;
@@ -1544,19 +1531,18 @@ async function askClaude(btcPrice,change24h,polyData,fg,orderBook){
       const recentWR = Math.round(recentWins / last30.length * 100);
 
       // Auto-corrección: evaluar cada señal guardada en el historial
-      // Una señal es "correcta" cuando apuntó en la dirección que REALMENTE ganó
-      // La dirección real ganadora = si ganamos, fue nuestra dirección; si perdimos, fue la contraria
+      // Guardamos en cada slot qué señales apuntaban en qué dirección
       const signalPerf = {};
       last30.forEach(h => {
         if(!h.signals) return;
         const won = h.result === 'WIN';
-        const predDir = h.direction;
-        // Dirección real del mercado en ese slot
-        const realDir = won ? predDir : (predDir === 'UP' ? 'DOWN' : 'UP');
+        const predDir = h.direction; // dirección que predijimos
         h.signals.forEach(sig => {
           if(!sig.key) return;
           if(!signalPerf[sig.key]) signalPerf[sig.key] = { correct: 0, total: 0 };
-          // Señal correcta = apuntaba en la dirección que REALMENTE ganó
+          // Señal correcta = apuntaba en la misma dirección que predijimos Y ganamos
+          //                 O apuntaba en dirección opuesta Y perdimos (señal correcta ignorada)
+          const realDir = won ? predDir : (predDir === 'UP' ? 'DOWN' : 'UP');
           const sigPointedReal = sig.bullish === (realDir === 'UP');
           if(sigPointedReal) signalPerf[sig.key].correct++;
           signalPerf[sig.key].total++;
@@ -1628,7 +1614,7 @@ async function askClaude(btcPrice,change24h,polyData,fg,orderBook){
   else{ bearPts += polyEdge * polyWeight; activeSignals.push({key:'poly', bullish:false}); }
 
   // 9. Fear & Greed (señal débil)
-  // 9. Fear & Greed (señal débil)
+  const fearIdx = parseInt(fg.value||50);
   if(fearIdx < 30){ bullPts += w.fear.base; activeSignals.push({key:'fear', bullish:true}); }
   else if(fearIdx > 70){ bearPts += w.fear.base; activeSignals.push({key:'fear', bullish:false}); }
 
@@ -1723,4 +1709,699 @@ Responde SOLO con JSON sin markdown:
 }
 
 // ─── Render predicción ───
-function renderPred
+    try {
+      const hist = loadHist().filter(h => h.result && h.result !== 'PENDING' && h.priceAtClose && h.ptb);
+      const last20 = hist.slice(0, 20);
+      if(last20.length < 5) return { intra:5, mom:3, macroPrice:5, ob:2, candle:2, gap:2, streak:0, recentWR:50 };
+
+      // Win rate reciente
+      const wins = last20.filter(h => h.result === 'WIN').length;
+      const recentWR = Math.round(wins / last20.length * 100);
+
+      // Detectar bias de dirección — si lleva 4+ slots en la misma dirección, penalizar
+      let streakDir = last20[0].direction, streakCount = 1;
+      for(let i = 1; i < Math.min(6, last20.length); i++){
+        if(last20[i].direction === streakDir) streakCount++;
+        else break;
+      }
+      const streakPenalty = streakCount >= 4 ? -3 : streakCount >= 3 ? -1.5 : 0;
+
+      // Calcular qué tan bien predijo cada señal en los últimos 20 slots
+      // Order book: ¿cuándo el OB era bullish, ganó?
+      // Simplificado: si WR reciente < 45%, reducir pesos de momentum y aumentar contrarian
+      const momWeight   = recentWR < 45 ? 1.0 : recentWR > 60 ? 4.0 : 3.0;
+      const intraWeight = recentWR < 45 ? 2.0 : recentWR > 60 ? 6.0 : 5.0;
+      const macroWeight = recentWR < 45 ? 3.0 : recentWR > 60 ? 6.0 : 5.0;
+      const obWeight    = recentWR < 45 ? 3.0 : 2.0; // order book más importante cuando momentum falla
+      const candleW     = recentWR < 45 ? 1.0 : 2.0;
+
+      // Detectar si el mercado está revirtiendo (últimas 3 velas contradicen tendencia)
+      const last3dirs = last20.slice(0,3).map(h => h.priceAtClose >= h.ptb ? 1 : -1);
+      const last3sum = last3dirs.reduce((a,b)=>a+b,0);
+      const reversing = Math.abs(last3sum) <= 1; // mercado lateral/reversión
+
+      return { intra: intraWeight, mom: momWeight, macroPrice: macroWeight, ob: obWeight, candle: candleW,
+               gap: 2, streak: streakPenalty, recentWR, streakCount, streakDir, reversing };
+    } catch(e) {
+      return { intra:5, mom:3, macroPrice:5, ob:2, candle:2, gap:2, streak:0, recentWR:50 };
+    }
+  }
+  const dw = getDynamicWeights();
+
+  // ── Score compuesto con pesos dinámicos ───────────────────────────────────
+  let bullPts = 0, bearPts = 0;
+
+  // 1. Momentum intra-slot (peso dinámico)
+  const intraSignal = parseFloat(intra.signal)||0;
+  const intraBearPenalty = (macroPriceTrend.trend <= -2) ? 0.5 : 1.0;
+  const intraBullPenalty = (macroPriceTrend.trend >= 2) ? 0.5 : 1.0;
+  if(intraSignal > 0) bullPts += Math.min(dw.intra, intraSignal/10) * intraBearPenalty;
+  else if(intraSignal < 0) bearPts += Math.min(dw.intra, Math.abs(intraSignal)/10) * intraBullPenalty;
+
+  // 2. Momentum slots recientes (peso dinámico)
+  if(mom.trend > 0) bullPts += Math.min(dw.mom, mom.trend * 1.2);
+  else if(mom.trend < 0) bearPts += Math.min(dw.mom, Math.abs(mom.trend) * 1.2);
+
+  // 3. Gap actual vs PTB — señal más directa del mercado (peso aumentado)
+  const timeWeight = secsLeft > 180 ? 1.0 : secsLeft > 120 ? 1.5 : secsLeft > 60 ? 2.5 : 4.0;
+  const gapScore = Math.min(4, Math.abs(pct) * 30 * (timeWeight/4));
+  if(diff > 0) bullPts += gapScore; else bearPts += gapScore;
+
+  // 4. Promedio gap reciente (peso 1.5)
+  const avgGapNum = parseFloat(mom.avgGap)||0;
+  if(avgGapNum > 20) bullPts += 1.5;
+  else if(avgGapNum > 0) bullPts += 0.75;
+  else if(avgGapNum < -20) bearPts += 1.5;
+  else if(avgGapNum < 0) bearPts += 0.75;
+
+  // 5. Macro tendencia hora (peso 2)
+  if(macro.trend > 0) bullPts += Math.min(2, macro.trend);
+  else if(macro.trend < 0) bearPts += Math.min(2, Math.abs(macro.trend));
+
+  // 6. Polymarket ponderado por volumen (peso 0.5-1.5)
+  const polyEdge = Math.abs(upPct - 50) / 50;
+  const polyWeight = polyVol > 30000 ? 1.5 : polyVol > 10000 ? 1.0 : 0.3;
+  if(upPct > downPct) bullPts += polyEdge * polyWeight; else bearPts += polyEdge * polyWeight;
+
+  // 7. Fear & Greed (peso 0.5)
+  if(fearIdx < 30) bullPts += 0.5; else if(fearIdx > 70) bearPts += 0.5;
+
+  // 8. Tendencia macro de precio (peso dinámico)
+  if(macroPriceTrend.trend > 0) bullPts += Math.min(dw.macroPrice, macroPriceTrend.trend * 1.5);
+  else if(macroPriceTrend.trend < 0) bearPts += Math.min(dw.macroPrice, Math.abs(macroPriceTrend.trend) * 1.5);
+
+  // 9. Order book presión (peso dinámico — más importante cuando momentum falla)
+  if(obSignal > 0) bullPts += Math.min(dw.ob, obSignal * 0.7);
+  else if(obSignal < 0) bearPts += Math.min(dw.ob, Math.abs(obSignal) * 0.7);
+
+  // 10. Momentum de velas (peso dinámico)
+  if(candle.signal > 0) bullPts += Math.min(dw.candle, candle.signal * 0.7);
+  else if(candle.signal < 0) bearPts += Math.min(dw.candle, Math.abs(candle.signal) * 0.7);
+
+  // 11. Hora del día desde memoria (peso 1.5)
+  if(hourBias.bias > 0.2) bullPts += hourBias.bias * 1.5;
+  else if(hourBias.bias < -0.2) bearPts += Math.abs(hourBias.bias) * 1.5;
+
+  // 12. Penalización por streak — si lleva 4+ slots en la misma dirección, penalizar esa dirección
+  if(dw.streak < 0){
+    if(dw.streakDir === 'UP') bullPts += dw.streak; // resta puntos bull
+    else bearPts += dw.streak; // resta puntos bear
+    bullPts = Math.max(0, bullPts);
+    bearPts = Math.max(0, bearPts);
+  }
+
+  // 13. Mercado en reversión — reducir confianza en señales de momentum
+  if(dw.reversing){
+    bullPts *= 0.85;
+    bearPts *= 0.85;
+  }
+
+  // Volatilidad + mercado lateral — penalizar confianza
+  const volPenalty = vol.volatile ? 0.85 : 1.0;
+  const lateralPenalty = lateral.lateral ? 0.85 : 1.0;
+  const volumePenalty = polyVol < 3000 ? 0.75 : polyVol < 8000 ? 0.90 : 1.0;
+
+  const totalPts = bullPts + bearPts || 1;
+
+// ─── Render predicción ───
+function renderPred(pred){
+  const neutral=pred.direction==='NEUTRAL'||pred.neutralZone;
+  const up=neutral?false:pred.direction==='UP';
+  const gs=(pred.gap||0)>=0?'+':'-',ga=Math.abs(pred.gap||0).toFixed(2);
+  const secs=Math.max(15,Math.floor((getNextSlot()-new Date())/1000));
+  const sq=(pred.signalQuality||'DEBIL').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const sqLabel=pred.signalQuality||'DÉBIL';
+  const dirIcon = neutral ? '⚠️' : up ? '↑' : '↓';
+  const dirColor = neutral ? 'var(--gold)' : up ? 'var(--green)' : 'var(--red)';
+  const dirClass = neutral ? 'neutral' : up ? 'up' : 'down';
+  const dirLabel = neutral ? 'NEUTRAL' : pred.direction;
+  $('predWrap').className=`pred ${dirClass}`;
+  $('predWrap').innerHTML=`
+    <div class="pred-hdr">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:22px;color:${dirColor}">${dirIcon}</span>
+          <span class="pred-verdict ${dirClass}">${dirLabel}</span>
+          <span class="pred-lock">🔒 LOCKED</span>
+          <span class="signal-quality ${sq}">${sqLabel}</span>
+        </div>
+        <div class="pred-desc">Will beat ${fmt(pred.ptbPrice)} · ${gs}$${ga} gap · ${secs}s left</div>
+      </div>
+      <div class="cd-wrap" id="cdWrap"></div>
+    </div>
+    ${pred.hourBadge?`<div class="no-bet-banner" style="background:${pred.hourColor==='green'?'rgba(38,166,154,0.06)':pred.hourColor==='red'?'rgba(239,83,80,0.06)':'rgba(240,185,11,0.06)'};border-color:${pred.hourColor==='green'?'rgba(38,166,154,0.3)':pred.hourColor==='red'?'rgba(239,83,80,0.2)':'rgba(240,185,11,0.2)'};color:${pred.hourColor==='green'?'var(--green)':pred.hourColor==='red'?'var(--red)':'var(--gold)'}">${pred.hourBadge}</div>`:''}
+    ${neutral?`<div class="no-bet-banner">⚠️ Señal ambigua — mercado sin dirección clara. Considera no apostar este slot.</div>`:''}
+    ${!neutral&&!up&&(pred.confidence||0)>=65?`<div class="no-bet-banner" style="background:rgba(38,166,154,0.06);border-color:rgba(38,166,154,0.3);color:var(--green)">✅ DOWN tiene 72% WR histórico — señal confiable.</div>`:''}
+    ${!neutral&&up&&(pred.confidence||0)<58?`<div class="no-bet-banner" style="background:rgba(239,83,80,0.06);border-color:rgba(239,83,80,0.2);color:var(--red)">⚠️ UP con baja confianza (${pred.confidence}%) — UP tiene 57% WR. Precaución.</div>`:''}
+    ${pred.hourColor==='red'&&!neutral?`<div class="no-bet-banner" style="background:rgba(239,83,80,0.06);border-color:rgba(239,83,80,0.2);color:var(--red)">🔴 Hora históricamente débil — considera reducir apuestas.</div>`:''}
+    <div class="chips">
+      <div class="chip"><span class="chip-lbl">CONFIDENCE</span><span style="color:${(pred.confidence||0)>=68?'var(--green)':(pred.confidence||0)>=58?'var(--blue)':'var(--muted)'}">${pred.confidence}%</span></div>
+      <div class="chip"><span class="chip-lbl">GAP</span><span style="color:${(pred.gap||0)>=0?'var(--green)':'var(--red)'}">${gs}$${ga}</span></div>
+    </div>
+    <div class="model-grid">
+      ${[['LSTM',pred.lstmDir,pred.lstmPct],['TECHNICAL',pred.techDir,pred.techPct],['HYBRID',pred.hybridDir,pred.hybridPct]].map(([n,d,p])=>`
+        <div class="mc"><div class="mc-name">${n}</div>
+        <div class="mc-dir ${(d||'UP')==='UP'?'up':'down'}">${(d||'UP')==='UP'?'↑':'↓'} ${d||'—'}</div>
+        <div class="mc-pct">${p?p.toFixed(1):'—'}%</div></div>`).join('')}
+    </div>
+    ${pred.pattern?`<div class="pattern">📊 ${pred.pattern}</div>`:''}
+    <div class="sl" style="margin-top:0">Signal Breakdown</div>
+    <table class="sig-table">
+      ${(pred.signals||[]).map(s=>{const c=s.bullish?'var(--green)':'var(--red)';return`<tr><td class="sig-name">${s.name}</td><td class="sig-val">${s.value}</td><td class="sig-bar-wrap"><div class="sig-bg"><div class="sig-fill" style="width:${Math.min(100,(s.score/5)*100)}%;background:${c}"></div></div></td><td class="sig-score">${Number(s.score).toFixed(2)}</td></tr>`;}).join('')}
+    </table>
+    <div class="hdiv"></div>
+    <div class="sl" style="margin-bottom:6px">Análisis IA</div>
+    <div id="aiText" class="ai-text"></div>`;
+  startCountdown(secs,pred.direction);
+  const words=(pred.analysis||'').split(' '),el=$('aiText');
+  if(el){let i=0;const iv=setInterval(()=>{if(i<words.length){el.innerHTML+=(i>0?' ':'')+words[i];i++;}else clearInterval(iv);},60);}
+}
+
+function renderSent(pred,fg){
+  const fgV=parseInt(fg.value)||0;
+  $('s1').textContent=`${fg.value} — ${fg.value_classification}`;$('s1').className=`sc-val ${fgV>60?'g':fgV>35?'a':'r'}`;$('s1').style.fontSize='10px';
+  $('s2').textContent=pred.sentiment||'—';$('s2').className=`sc-val ${pred.sentiment==='Fearful'?'r':pred.sentiment==='Greedy'?'g':'a'}`;
+  $('s3').textContent='—';$('s3').className='sc-val a';
+  $('s4').textContent=pred.fundingRate||'—';$('s4').className='sc-val a';
+  const fl=(pred.exchangeFlow||'').toUpperCase();$('s5').textContent=fl||'—';$('s5').className=`sc-val ${fl==='INFLOW'?'g':fl==='OUTFLOW'?'r':'a'}`;
+  const wh=(pred.whaleActivity||'LOW').toUpperCase();$('s6').textContent=wh;$('s6').className=`sc-val ${wh==='HIGH'?'g':wh==='MEDIUM'?'a':'m'}`;
+}
+
+// ─── Slot timer con auto-close + auto-refresh ───
+let slotTimer=null, lastSlotKey=null;
+function getNextSlot(){
+  const n=new Date(),m=n.getMinutes(),nm=(Math.floor(m/5)+1)*5,next=new Date(n);
+  if(nm>=60){next.setHours(next.getHours()+1);next.setMinutes(0,0,0);}
+  else next.setMinutes(nm,0,0);
+  return next;
+}
+function startSlotTimer(){
+  if(slotTimer)clearInterval(slotTimer);
+  lastSlotKey=getSlotKey();
+  slotTimer=setInterval(()=>{
+    const now=new Date(),next=getNextSlot(),rem=Math.max(0,next-now),total=300000;
+    const pct=((total-rem)/total*100).toFixed(1);
+    const m=Math.floor(rem/60000),s=Math.floor((rem%60000)/1000);
+    const nh=next.getHours()%12||12,nm2=String(next.getMinutes()).padStart(2,'0'),ap=next.getHours()>=12?'PM':'AM';
+    $('slotVal').textContent=`${nh}:${nm2} ${ap} (${m}m ${String(s).padStart(2,'0')}s)`;
+    $('slotFill').style.width=pct+'%';
+
+    const curKey=getSlotKey();
+    if(curKey!==lastSlotKey){
+      // Slot nuevo: cerrar el anterior con precio actual
+      if(currentBTC) closeLastSlot(currentBTC);
+      lastSlotKey=curKey;
+      ptbFixed=null;
+      ptbSlotKey=null;
+      if(polyRetryTimer){clearInterval(polyRetryTimer);polyRetryTimer=null;}
+      runFull();
+    }
+  },1000);
+}
+
+// ─── Countdown ───
+let cdTimer=null;
+function startCountdown(total,dir){
+  if(cdTimer)clearInterval(cdTimer);
+  let s=total;const r=22,C=2*Math.PI*r,up=dir==='UP';
+  const draw=()=>{
+    const el=$('cdWrap');if(!el)return;
+    const off=C*(1-Math.max(0,s)/total);
+    el.innerHTML=`<svg class="cd-svg" width="56" height="56" viewBox="0 0 56 56">
+      <circle cx="28" cy="28" r="${r}" fill="none" stroke="#2a2b3a" stroke-width="4"/>
+      <circle cx="28" cy="28" r="${r}" fill="none" stroke="${up?'#00e5a0':'#ff3b5c'}" stroke-width="4"
+        stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}"/>
+      <text x="28" y="28" text-anchor="middle" dominant-baseline="middle"
+        font-family="Syne,sans-serif" font-weight="700" font-size="12" fill="#edeaf3"
+        >${s}</text>
+    </svg><div class="cd-sub">SLOT LEFT</div>`;
+  };
+  draw();cdTimer=setInterval(()=>{if(s>0){s--;draw();}else clearInterval(cdTimer);},1000);
+}
+
+// ─── MAIN ───
+async function runFull(){
+  const btn=$('refreshBtn');
+  btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span> &nbsp;ACTUALIZANDO...';
+  ld('predWrap','Conectando...');
+  ['d1','d2','d3','d4'].forEach(id=>{$(id).className='sdot spin';});
+
+  let btcPrice=null,change24h=0,polyData=null,fg={value:'—',value_classification:'Unknown'};
+
+  // PTB desde Chainlink (mismo que Polymarket)
+  if(!ptbFixed){
+    try{
+      const result = await fetchSlotOpenPrice();
+      if(result && result.price > 0) setPTB(result.price, result.source);
+    }catch(e){}
+  }
+
+  // BTC precio actual — Chainlink (ya llega via WebSocket), fallback Binance
+  try{
+    let price = chainlinkPrice;
+    let src = 'Chainlink';
+    if(!price || price <= 0) {
+      const btc = await fetchBTCBinance();
+      price = btc.usd; change24h = btc.usd_24h_change||0; src = 'Binance';
+    }
+    btcPrice = price; currentBTC = price;
+    $('curVal').textContent = fmt(price);
+    $('curSub').textContent = src + ' — ' + fmtTime();
+    if(!ptbFixed) setPTB(price, src + ' spot');
+    updateDiff();
+    setDS(2, true, `BTC — ${fmt(price)} (${src}) ✓`);
+  }catch(e){setDS(2,false,`BTC — ${e.message}`);}
+
+  // Fear & Greed
+  try{fg=await fetchFG();setDS(3,true,`Fear & Greed — ${fg.value} (${fg.value_classification}) ✓`);}
+  catch(e){setDS(3,false,'Fear & Greed — Error');}
+
+  // Polymarket
+  try{
+    ld('polyWrap','Buscando mercado BTC 5m...');
+    polyData=await fetchPolyBTC5m();
+    renderPoly(polyData);
+    setDS(1,true,`Polymarket — UP ${polyData.upPct}% / DOWN ${polyData.downPct}% ✓`);
+    if(polyRetryTimer){clearInterval(polyRetryTimer);polyRetryTimer=null;}
+  }catch(e){
+    setDS(1,false,`Polymarket — ${e.message}`);
+    $('polyWrap').innerHTML=`<div class="warn">⚠ ${e.message} — reintentando...</div>`;
+    // Reintentar solo Polymarket cada 30s hasta encontrar el mercado
+    if(!polyRetryTimer){
+      polyRetryTimer=setInterval(async()=>{
+        try{
+          const pd=await fetchPolyBTC5m();
+          renderPoly(pd);
+          setDS(1,true,`Polymarket — UP ${pd.upPct}% / DOWN ${pd.downPct}% ✓`);
+          clearInterval(polyRetryTimer);polyRetryTimer=null;
+        }catch(err){
+          setDS(1,false,`Polymarket — ${err.message}`);
+          $('polyWrap').innerHTML=`<div class="warn">⚠ ${err.message} — reintentando...</div>`;
+        }
+      },30000);
+    }
+  }
+
+  // Order Book — consultar después de tener polyData
+  let orderBookData = null;
+  if(polyData?.tokenUp){
+    try{
+      orderBookData = await fetchOrderBookSignal(polyData.tokenUp, polyData.tokenDown);
+      if(orderBookData) console.log('[OB]', orderBookData.desc);
+    }catch(e){}
+  }
+
+  // Claude IA — esperar 90s desde inicio del slot para tener datos intra-slot
+  try{
+    $('d4').className='sdot spin';$('l4').textContent='IA — esperando datos del slot...';
+    const slotAge = Math.floor((Date.now() - getSlotKey()*1000)/1000);
+    const waitTime = Math.max(0, 90 - slotAge); // esperar hasta 90s del slot
+    if(waitTime > 0 && !$('refreshBtn').dataset.forced){
+      ld('predWrap',`Recopilando datos del slot... (${waitTime}s)`);
+      // Mostrar cuenta regresiva
+      let remaining = waitTime;
+      const countInterval = setInterval(()=>{ // ID guardado — se limpia con clearInterval(countInterval)
+        remaining--;
+        if(remaining <= 0){ clearInterval(countInterval); return; }
+        ld('predWrap',`Recopilando datos del slot... (${remaining}s)`);
+        $('l4').textContent=`IA — analizando mercado (${remaining}s)...`;
+      }, 1000);
+      await new Promise(r => setTimeout(r, waitTime * 1000));
+      clearInterval(countInterval);
+    }
+    ld('predWrap','Generando predicción con IA...');
+    $('l4').textContent='IA — generando predicción...';
+    const pred=await askClaude(btcPrice,change24h,polyData,fg,orderBookData);
+
+    // Sanity check: solo actuar si el gap es REALMENTE imposible Y Polymarket no dice lo contrario
+    const secsLeft2=Math.max(0,Math.floor((getNextSlotMs()-Date.now())/1000));
+    const gap2=btcPrice&&ptbFixed?btcPrice-ptbFixed:0;
+    const gapPct2=ptbFixed?Math.abs(gap2/ptbFixed*100):0;
+    const polyUp2=parseFloat(polyData?.upPct||50);
+    // Solo forzar DOWN si: gap negativo grande + poco tiempo + Polymarket también dice DOWN
+    const impossibleGap = secsLeft2<60&&gapPct2>0.25 || secsLeft2<30&&gapPct2>0.12 || secsLeft2<15&&gapPct2>0.05;
+    const crowdAlsoDn = polyUp2 < 45; // Polymarket también bajista
+    if(gap2<0 && impossibleGap && crowdAlsoDn){
+      console.warn('[SANITY] Gap imposible + crowd bearish → DOWN');
+      pred.direction='DOWN';
+      pred.confidence=Math.min(pred.confidence||65,85);
+    }
+
+    renderPred(pred);
+    renderSent(pred,fg);
+    addPrediction(pred,ptbFixed,btcPrice,polyData);
+    if(pred && pred.direction !== 'NEUTRAL' && pred.confidence >= 65){
+      fetch('https://omega-production-d6f1.up.railway.app/trade', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          direction: pred.direction,
+          confidence: pred.confidence,
+          signal_quality: pred.signalQuality,
+          token_up: polyData?.tokenUp || null,
+          token_down: polyData?.tokenDown || null,
+          bankroll: parseFloat(document.getElementById('brInput')?.value || '50'),
+          hour: new Date().getHours()
+        })
+      })
+      .then(r => r.json())
+      .then(result => {
+        if(result.executed){
+          console.log('✅ Trade ejecutado:', result.trade);
+        } else {
+          console.log('⏭️ Trade omitido:', result.reason);
+        }
+      })
+      .catch(e => console.error('Trade error:', e));
+    }
+    setDS(4,true,'IA (Claude) — ✓');
+  }catch(e){
+    console.error('[askClaude] Error IA:', e.message);
+    setDS(4,false,`IA — ${e.message}`);
+    $('predWrap').innerHTML=`<div class="err">⚠ Error IA: ${e.message}</div>`;
+  }
+
+  btn.disabled=false;btn.innerHTML='⟳ &nbsp;ACTUALIZAR PREDICCIÓN';
+}
+
+// Fallback: si RTDS no actualiza en 15s, usar Binance
+const btcFallbackInterval = setInterval(async()=>{
+  // El precio ya se actualiza via rtdsWs.onmessage en tiempo real
+  // Este intervalo solo es fallback si el WebSocket no está conectado
+  if (!rtdsWs || rtdsWs.readyState !== WebSocket.OPEN) {
+    try{
+      const btc = await fetchBTCBinance();
+      currentBTC = btc.usd;
+      $('curVal').textContent = fmt(btc.usd);
+      $('curSub').textContent = 'Binance (fallback) — ' + fmtTime();
+      updateDiff();
+    }catch(e){}
+  }
+},15000);
+
+// Init
+connectRTDS(); // Conectar WebSocket Chainlink inmediatamente
+renderHistory();
+startSlotTimer();
+runFull();
+renderAdvancedStats();
+
+// ── BANKROLL MANAGER ──
+let currentRisk = 'normal';
+const RISK_PCT = { conservative: 0.02, normal: 0.04, aggressive: 0.06 };
+const RISK_LABELS = { conservative: '2%', normal: '4%', aggressive: '6%' };
+
+function getHourMultiplier(){
+  // Calcula multiplicador basado en WR histórico de la hora actual
+  const m = loadMemory();
+  const hour = new Date().getHours();
+  if(!m.hourStats || !m.hourStats[hour]) return { mult: 1.0, wr: null, slots: 0 };
+  const h = m.hourStats[hour];
+  const total = h.wins + h.losses;
+  if(total < 3) return { mult: 1.0, wr: null, slots: total };
+  const wr = h.wins / total;
+  // Multiplicador: 83% WR → 1.3x, 67% WR → 0.8x, 50% WR → 0.5x
+  const mult = wr >= 0.80 ? 1.3 : wr >= 0.72 ? 1.1 : wr >= 0.60 ? 1.0 : wr >= 0.50 ? 0.8 : 0.6;
+  return { mult, wr: Math.round(wr*100), slots: total };
+}
+
+// Función global — el automatizador la llamará para saber cuánto apostar
+window.getBetAmount = function(){
+  const bankroll = parseFloat(document.getElementById('brBankroll').value) || 200;
+  const basePct = RISK_PCT[currentRisk] || 0.04;
+  const { mult, wr, slots } = getHourMultiplier();
+  const amount = bankroll * basePct * mult;
+  return {
+    amount: Math.max(1, Math.round(amount * 100) / 100),
+    bankroll,
+    risk: currentRisk,
+    basePct,
+    mult,
+    hourWR: wr,
+    hourSlots: slots
+  };
+};
+
+function setRisk(risk){
+  currentRisk = risk;
+  ['conservative','normal','aggressive'].forEach(r => {
+    const btn = document.getElementById('risk'+r.charAt(0).toUpperCase()+r.slice(1));
+    btn.className = 'risk-btn ' + r + (r === risk ? ' active' : '');
+  });
+  updateBetDisplay();
+  // Guardar preferencia
+  try{ localStorage.setItem('omega_risk', risk); }catch(e){}
+}
+
+function updateBetDisplay(){
+  const bet = window.getBetAmount();
+  document.getElementById('brBetAmount').textContent = '$' + bet.amount.toFixed(2);
+  document.getElementById('brBetPct').textContent = (bet.basePct * bet.mult * 100).toFixed(1) + '%';
+
+  const multText = bet.mult !== 1.0 ? ` × ${bet.mult}x` : '';
+  const hourText = bet.hourWR ? `(${bet.hourWR}% WR esta hora, ${bet.hourSlots} slots)` : '(hora sin datos)';
+  document.getElementById('brBetReason').textContent =
+    `${RISK_LABELS[bet.risk]} × $${bet.bankroll}${multText} ${hourText}`;
+  document.getElementById('brHourWR').textContent =
+    bet.hourWR ? `Esta hora: ${bet.hourWR}% WR` : 'Esta hora: sin datos';
+
+  // Warning si apuesta > 8% del bankroll
+  const warning = document.getElementById('brWarning');
+  const pct = bet.amount / bet.bankroll;
+  if(pct > 0.08){
+    warning.style.display = 'block';
+    warning.textContent = `⚠ Apuesta alta (${(pct*100).toFixed(1)}% del bankroll). Considera reducir el riesgo o aumentar el capital.`;
+  } else {
+    warning.style.display = 'none';
+  }
+}
+
+// Cargar preferencia guardada
+try{
+  const saved = localStorage.getItem('omega_risk');
+  if(saved) setRisk(saved);
+}catch(e){}
+updateBetDisplay();
+
+</script>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+// ── Lightweight Charts (TradingView) — igual que Polymarket ──
+let lwChart = null;
+let lwLineSeries = null;
+let lwCandleSeries = null;
+let lwPtbLine = null;
+let chartMode = 'line';
+let chartPrices = []; // {time (unix seconds), value}
+let candleBuckets = {}; // keyed by 30s bucket
+
+function setChartMode(mode){
+  chartMode = mode;
+  document.getElementById('btnLine').className = 'chart-btn' + (mode==='line'?' active':'');
+  document.getElementById('btnCandle').className = 'chart-btn' + (mode==='candle'?' active':'');
+  if(!lwChart) return;
+  if(mode === 'line'){
+    if(lwCandleSeries){ lwChart.removeSeries(lwCandleSeries); lwCandleSeries = null; }
+    if(!lwLineSeries) lwLineSeries = createLineSeries();
+    syncLineSeries();
+  } else {
+    if(lwLineSeries){ lwChart.removeSeries(lwLineSeries); lwLineSeries = null; }
+    if(!lwCandleSeries) lwCandleSeries = createCandleSeries();
+    syncCandleSeries();
+  }
+}
+
+function createLineSeries(){
+  const s = lwChart.addAreaSeries({
+    lineColor: '#f0b90b',
+    lineWidth: 3,
+    topColor: 'rgba(240,185,11,0.25)',
+    bottomColor: 'rgba(240,185,11,0.0)',
+    crosshairMarkerVisible: true,
+    crosshairMarkerRadius: 5,
+    crosshairMarkerBorderColor: '#f0b90b',
+    crosshairMarkerBackgroundColor: '#1a1b1e',
+    lastValueVisible: true,
+    priceLineVisible: false,
+  });
+  return s;
+}
+
+function createCandleSeries(){
+  const s = lwChart.addCandlestickSeries({
+    upColor: '#26a69a',
+    downColor: '#ef5350',
+    borderUpColor: '#2ec4b6',
+    borderDownColor: '#ff4d6d',
+    wickUpColor: '#2ec4b6',
+    wickDownColor: '#ff4d6d',
+    borderVisible: true,
+    wickVisible: true,
+  });
+  return s;
+}
+
+function syncLineSeries(){
+  if(!lwLineSeries || chartPrices.length === 0) return;
+  lwLineSeries.setData(chartPrices);
+  updatePtbLine();
+}
+
+function syncCandleSeries(){
+  if(!lwCandleSeries) return;
+  const candles = Object.values(candleBuckets)
+    .sort((a,b) => a.time - b.time)
+    .map(c => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
+  if(candles.length > 0) lwCandleSeries.setData(candles);
+  updatePtbLine();
+}
+
+let lwPtbFixed = null; // track cuando realmente cambió el PTB
+function updatePtbLine(){
+  if(!lwChart || !ptbFixed) return;
+  // Solo recrear si el PTB cambió
+  if(lwPtbFixed === ptbFixed && lwPtbLine) return;
+  lwPtbFixed = ptbFixed;
+  const series = lwLineSeries || lwCandleSeries;
+  if(!series) return;
+  if(lwPtbLine){ try{ series.removePriceLine(lwPtbLine); }catch(e){} lwPtbLine = null; }
+  lwPtbLine = series.createPriceLine({
+    price: ptbFixed,
+    color: 'rgba(239,83,80,0.85)',
+    lineWidth: 2,
+    lineStyle: LightweightCharts.LineStyle.Dashed,
+    axisLabelVisible: true,
+    title: ' PTB ',
+    axisLabelColor: '#ef5350',
+    axisLabelTextColor: '#ffffff',
+  });
+}
+
+function initChart(){
+  const container = document.getElementById('chartContainer');
+  if(!container || lwChart) return;
+
+  // Fijar dimensiones antes de crear el chart
+  const W = container.clientWidth || 300;
+  const H = Math.max(container.clientHeight, 220);
+
+  lwChart = LightweightCharts.createChart(container, {
+    width: W,
+    height: H,
+    layout: {
+      background: { type: 'solid', color: 'transparent' },
+      textColor: '#8a9bb5',
+      fontSize: 11,
+      fontFamily: "'JetBrains Mono', monospace",
+    },
+    grid: {
+      vertLines: { color: 'rgba(255,255,255,0.04)' },
+      horzLines: { color: 'rgba(255,255,255,0.04)' },
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Magnet,
+      vertLine: { color: 'rgba(240,185,11,0.4)', width: 1, style: 1, labelBackgroundColor: '#f0b90b' },
+      horzLine: { color: 'rgba(240,185,11,0.4)', width: 1, style: 1, labelBackgroundColor: '#f0b90b' },
+    },
+    rightPriceScale: {
+      borderVisible: false,
+      textColor: '#8a9bb5',
+      scaleMargins: { top: 0.1, bottom: 0.1 },
+    },
+    timeScale: {
+      borderVisible: false,
+      textColor: '#8a9bb5',
+      timeVisible: true,
+      secondsVisible: true,
+      fixLeftEdge: false,
+      fixRightEdge: true,
+      tickMarkFormatter: (time) => {
+        const d = new Date(time * 1000);
+        const h = d.getHours().toString().padStart(2,'0');
+        const m = d.getMinutes().toString().padStart(2,'0');
+        return h + ':' + m;
+      },
+    },
+    handleScroll: true,
+    handleScale: true,
+  });
+
+  // Auto-resize con debounce para evitar lag
+  let resizeTimer = null;
+  const ro = new ResizeObserver(() => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if(lwChart && container.clientWidth > 0){
+        lwChart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+      }
+    }, 100);
+  });
+  ro.observe(container);
+
+  lwLineSeries = createLineSeries();
+}
+
+let lastChartSec = 0;
+let lastChartUpdate = 0; // timestamp ms del último render
+
+function addChartPrice(price){
+  const nowMs = Date.now();
+  let nowSec = Math.floor(nowMs / 1000);
+  if(nowSec <= lastChartSec) nowSec = lastChartSec + 1;
+  lastChartSec = nowSec;
+
+  // Throttle: actualizar gráfico máx cada 1 segundo
+  const shouldRender = (nowMs - lastChartUpdate) >= 1000;
+  if(shouldRender) lastChartUpdate = nowMs;
+
+  // Guardar punto solo si pasó suficiente tiempo
+  const lastEntry = chartPrices[chartPrices.length - 1];
+  const shouldAdd = !lastEntry || (nowSec - lastEntry.time) >= 2;
+  if(shouldAdd){
+    chartPrices.push({ time: nowSec, value: price });
+    if(chartPrices.length > 200) chartPrices.shift();
+  }
+
+  // Actualizar bucket de velas (30s)
+  const bucketKey = Math.floor(nowSec / 30) * 30;
+  if(!candleBuckets[bucketKey]){
+    candleBuckets[bucketKey] = { time: bucketKey, open: price, high: price, low: price, close: price };
+  } else {
+    candleBuckets[bucketKey].high = Math.max(candleBuckets[bucketKey].high, price);
+    candleBuckets[bucketKey].low  = Math.min(candleBuckets[bucketKey].low,  price);
+    candleBuckets[bucketKey].close = price;
+  }
+  const keys = Object.keys(candleBuckets).map(Number).sort((a,b)=>b-a);
+  keys.slice(100).forEach(k => delete candleBuckets[k]);
+
+  if(!lwChart){ initChart(); return; }
+
+  if(!shouldRender) return; // throttle — no renderizar cada mensaje WS
+
+  if(chartMode === 'line' && lwLineSeries && shouldAdd){
+    try {
+      lwLineSeries.update({ time: nowSec, value: price });
+    } catch(e) {
+      lwChart.removeSeries(lwLineSeries);
+      lwLineSeries = createLineSeries();
+      if(chartPrices.length > 0) lwLineSeries.setData(chartPrices);
+    }
+    updatePtbLine();
+  } else if(chartMode === 'candle' && lwCandleSeries && shouldRender){
+    try {
+      const c = candleBuckets[bucketKey];
+      lwCandleSeries.update({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close });
+    } catch(e) {
+      lwChart.removeSeries(lwCandleSeries);
+      lwCandleSeries = createCandleSeries();
+      syncCandleSeries();
+    }
+    updatePtbLine();
+  }
+}
+
+// Init chart cuando DOM esté listo
+setTimeout(initChart, 800);
+</script>
+</body>
+</html>
